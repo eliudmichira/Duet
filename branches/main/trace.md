@@ -10,3 +10,4 @@ _[Checkpoint: 69f0cf51 — Fixed popup drawer visibility, avatar recents, and h5
 [16:55:42] OBSERVE: read extension\popup.html
 [16:56:24] OBSERVE: read extension\popup.js
 [16:56:35] ACT: edited extension\popup.js
+[16:56:40] ACT: edited extension\popup.js
