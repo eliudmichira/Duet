@@ -7,3 +7,4 @@
 _[Checkpoint: 69f0cf51 — Fixed popup drawer visibility, avatar recents, and h5i path errors.]_
 ---
 
+[16:55:42] OBSERVE: read extension\popup.html
