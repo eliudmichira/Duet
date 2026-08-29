@@ -14,3 +14,7 @@ h5i_bin/
 
 # Dev-only folders
 free-claude-code/
+.claude/
+.build-firefox/
+.firebase/
+.freebuff/

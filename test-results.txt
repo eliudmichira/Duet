@@ -1,0 +1,55 @@
+# Test Results — Duet Agent
+Generated: 2026-08-30
+
+## Environment
+- Node.js v22.x
+- Platform: linux
+- No browser DOM available (simulated inputs)
+
+## Test 1: Module Syntax Validation
+All 5 agent modules parsed via new Function() with no errors.
+PASS site-analyzer.js (400 lines)
+PASS adapter-generator.js (672 lines)
+PASS adapter-registry.js (171 lines)
+PASS sandbox-tester.js (296 lines)
+PASS agent.js (234 lines)
+
+## Test 2: Adapter Generation + Validation
+Each strategy template generates valid adapter code with required exports.
+PASS generic_html5     strategy=generic_html5         hooks=7 code=3417 chars
+PASS shadow_dom        strategy=shadow_dom            hooks=8 code=2737 chars
+PASS custom_player     strategy=custom_player         hooks=5 code=3700 chars
+PASS framework_yt      strategy=framework_specific    hooks=5 code=3069 chars
+PASS framework_vimeo   strategy=framework_specific    hooks=5 code=2682 chars
+PASS cross_origin      strategy=cross_origin_iframe   hooks=5 code=4559 chars
+
+## Test 3: Adapter Registry Round-Trip
+Registered 3 adapters, verified lookup by hostname and framework fallback.
+PASS All lookups returned expected results
+
+## Test 4: Per-Site Adapter Generation (Simulated DOM)
+IMPORTANT: These tests use simulated DOM features, not live page inspection.
+Detection results reflect what the analyzer WOULD find given the inputs.
+
+PASS YouTube        strategy=framework_specific     confidence=75%
+PASS Vimeo          strategy=framework_specific     confidence=75%
+PASS Netflix        strategy=framework_specific     confidence=30% [DRM: adapter generated but sync may be limited]
+PASS Disney+        strategy=framework_specific     confidence=30% [DRM: adapter generated but sync may be limited]
+PASS Prime Video    strategy=framework_specific     confidence=30% [DRM: adapter generated but sync may be limited]
+PASS Twitch         strategy=framework_specific     confidence=55%
+PASS Archive.org    strategy=generic_html5          confidence=75%
+SKIP No-video       no video detected (expected: agent reports no_video_found)
+
+Summary: 7 generated OK, 0 failed, 1 skipped (no video)
+
+## Test 5: Integration Validation
+PASS content.js agent integration code parses correctly
+PASS manifest.json is valid JSON with agent scripts in content_scripts
+
+## Known Limitations (unverified)
+- No live browser DOM testing was performed
+- DRM sites (Netflix, Disney+, Prime) generate adapters but sync behavior is unverified
+- Cross-origin iframe adapters rely on postMessage which may be blocked by CSP
+- Shadow DOM traversal is untested against real shadow-root boundaries
+- No end-to-end sync test (two browsers, one room, play/pause/seek)
+- SPA navigation survival is untested

@@ -25,6 +25,8 @@
   let partnerName = "";       // last known display name of the partner (from SYNC_STATUS)
   let partnerEmoji = "";      // last known avatar emoji of the partner
   let myEmoji = "";           // my own avatar (cached from storage for self chat bubbles)
+  let agentAdapter = null;    // generated adapter from DuetAgent (if active)
+  let agentInitialized = false;
 
   // Load own avatar from storage so self-sent chat bubbles include our portrait.
   try {
@@ -173,15 +175,65 @@
     const ready = v.readyState >= 2 ? 1 : 0;
     return area + ready * 1_000_000;
   }
-  function findVideo() {
-    const videos = Array.from(document.querySelectorAll("video"));
-    if (!videos.length) return null;
-    let best = null, bestScore = 0;
-    for (const v of videos) {
-      const s = scoreVideo(v);
-      if (s > bestScore) { best = v; bestScore = s; }
+  // Track how many consecutive polls find no video — triggers agent fallback
+  let noVideoPolls = 0;
+  const AGENT_FALLBACK_THRESHOLD = 3; // after 3 failed polls, try the agent
+
+  async function tryAgentFallback() {
+    if (!window.DuetAgent || agentInitialized) return null;
+    try {
+      agentInitialized = true;
+      dlog("[Duet Agent] Standard detection failed, running agent analysis...");
+      const result = await DuetAgent.analyze(location.href, { skipTest: true });
+      if (result?.adapter) {
+        agentAdapter = result.adapter;
+        dlog(`[Duet Agent] Adapter loaded: ${result.adapter.id} (${result.adapter.strategy})`);
+        // The adapter exposes window.__duetAdapter
+        if (window.__duetAdapter) {
+          const v = window.__duetAdapter.findVideo();
+          if (v) return v;
+        }
+      }
+    } catch (err) {
+      dlog("[Duet Agent] Fallback failed:", err);
     }
-    return best;
+    return null;
+  }
+
+  function findVideo() {
+    // Standard detection first
+    const videos = Array.from(document.querySelectorAll("video"));
+    if (videos.length) {
+      let best = null, bestScore = 0;
+      for (const v of videos) {
+        const s = scoreVideo(v);
+        if (s > bestScore) { best = v; bestScore = s; }
+      }
+      if (best) {
+        noVideoPolls = 0;
+        return best;
+      }
+    }
+
+    // Standard detection found nothing — count consecutive failures
+    noVideoPolls++;
+
+    // If we already have an active agent adapter, use it
+    if (agentAdapter && window.__duetAdapter) {
+      try {
+        const v = window.__duetAdapter.findVideo();
+        if (v) return v;
+      } catch {}
+    }
+
+    // After threshold, trigger async agent fallback
+    if (noVideoPolls >= AGENT_FALLBACK_THRESHOLD && !agentInitialized) {
+      tryAgentFallback().then((v) => {
+        if (v && v !== video) attachListeners(v);
+      });
+    }
+
+    return null;
   }
   function attachListeners(v) {
     if (v.__duetAttached) {
