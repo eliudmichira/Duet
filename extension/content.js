@@ -28,6 +28,17 @@
   let agentAdapter = null;    // generated adapter from DuetAgent (if active)
   let agentInitialized = false;
 
+  // Connection quality (ping from background)
+  let lastPingMs = null;
+
+  // Typing indicator state
+  let partnerTyping = false;
+  let typingClearTimer = null;
+
+  // Undo sync: save position before catch-up so user can revert
+  let preSyncPosition = null;
+  let preSyncTimestamp = null;
+
   // Load own avatar from storage so self-sent chat bubbles include our portrait.
   try {
     chrome.storage.local.get(["myEmoji"], (data) => {
@@ -915,6 +926,12 @@
       syncBtn.addEventListener('mouseleave', () => syncBtn.style.background = 'rgba(255,255,255,0.1)');
       syncBtn.addEventListener('click', async () => {
         if (syncBtn.disabled) return;
+        // Save current position for undo before syncing
+        if (!video) video = findVideo();
+        if (video) {
+          preSyncPosition = video.currentTime;
+          preSyncTimestamp = Date.now();
+        }
         syncBtn.disabled = true;
         const who = partnerName || "partner";
         syncBtn.textContent = "Catching up…";
@@ -928,6 +945,8 @@
           syncBtn.textContent = "Try again";
         } else if (res?.ok) {
           syncBtn.textContent = "Caught up ✓";
+          // Show undo button for 5s after successful sync
+          showUndoButton();
         } else if (typeof res?.drift === "number") {
           syncBtn.textContent = `Off by ${res.drift.toFixed(1)}s`;
           showFlash("pause", `Couldn't fully sync — off by ${res.drift.toFixed(1)}s.`);
@@ -1073,6 +1092,14 @@
         // Keep the controls panel open while typing, even if the mouse drifts off.
         chatInput.addEventListener('focus', () => { controls.dataset.locked = '1'; });
         chatInput.addEventListener('blur',  () => { delete controls.dataset.locked; });
+        // Send typing indicator while user is typing
+        let typingThrottle = null;
+        chatInput.addEventListener('input', () => {
+          if (!typingThrottle) {
+            safeSend({ type: 'SEND_TYPING' });
+            typingThrottle = setTimeout(() => { typingThrottle = null; }, 2000);
+          }
+        });
       }
 
       overlay.appendChild(badge);
@@ -1112,11 +1139,18 @@
       let emoji = partnerEmoji || "👋";
 
       if (peerCount >= 2) {
-        if (currentDriftStatus === "sync")           { color = "#5ee2a0"; text = "in sync";           emoji = "💞"; }
-        else if (currentDriftStatus === "warning")   { color = "#fcd34d"; text = "slight delay";     emoji = "⏳"; }
-        else if (currentDriftStatus === "out_of_sync") { color = "#ef4444"; text = "out of sync";    emoji = "⚠️"; }
-        else if (currentDriftStatus === "mismatch")  { color = "#ef4444"; text = "different video"; emoji = "🎬"; }
-        else                                          { color = "#ffc89a"; text = "waiting for video"; emoji = "📺"; }
+        if (currentDriftStatus === "sync")           { color = "#5ee2a0"; text = partnerTyping ? "typing…" : "in sync";           emoji = partnerTyping ? "💬" : "💞"; }
+        else if (currentDriftStatus === "warning")   { color = "#fcd34d"; text = partnerTyping ? "typing…" : "slight delay";     emoji = partnerTyping ? "💬" : "⏳"; }
+        else if (currentDriftStatus === "out_of_sync") { color = "#ef4444"; text = partnerTyping ? "typing…" : "out of sync";    emoji = partnerTyping ? "💬" : "⚠️"; }
+        else if (currentDriftStatus === "mismatch")  { color = "#ef4444"; text = partnerTyping ? "typing…" : "different video"; emoji = partnerTyping ? "💬" : "🎬"; }
+        else                                          { color = "#ffc89a"; text = partnerTyping ? "typing…" : "waiting for video"; emoji = partnerTyping ? "💬" : "📺"; }
+      }
+
+      // Connection quality: color-code ping
+      let pingText = "";
+      if (typeof lastPingMs === "number") {
+        const pingColor = lastPingMs < 100 ? "#5ee2a0" : lastPingMs < 300 ? "#fcd34d" : "#ef4444";
+        pingText = `<span style="color:${pingColor};font-size:9px;font-weight:500;margin-left:2px;">${lastPingMs}ms</span>`;
       }
 
       const topbar = document.getElementById("__pp_topbar");
@@ -1126,6 +1160,7 @@
         <span style="color:rgba(244,241,234,0.55);font-weight:500">·</span>
         <span style="font-size:12px;line-height:1;">${twemojiHtml(emoji)}</span>
         <span style="color:rgba(244,241,234,0.85);transition:color 0.3s;flex:1;">${text}</span>
+        ${pingText}
         <button id="__pp_min_btn" title="Minimize to tray" style="background:rgba(255,255,255,0.06);border:none;color:rgba(244,241,234,0.7);width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;display:grid;place-items:center;padding:0;margin-left:4px;">−</button>
       `;
       const minBtn = topbar.querySelector("#__pp_min_btn");
@@ -1154,6 +1189,46 @@
       const ctrl = document.getElementById("__pp_controls");
       if (ctrl) ctrl.style.display = 'none';
     }
+  }
+
+  // ── Undo sync ──────────────────────────────────────────────
+  // Shows a temporary "Undo" button after a successful catch-up sync.
+  // Clicking it seeks the video back to the pre-sync position.
+  function showUndoButton() {
+    const controls = document.getElementById("__pp_controls");
+    if (!controls || preSyncPosition === null) return;
+
+    // Remove any existing undo button first
+    const existing = document.getElementById("__pp_undo_btn");
+    if (existing) existing.remove();
+
+    const undoBtn = document.createElement("button");
+    undoBtn.id = "__pp_undo_btn";
+    undoBtn.textContent = "↩ Undo sync";
+    undoBtn.style.cssText = "background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; border-radius: 6px; padding: 5px; font-weight: 600; cursor: pointer; transition: background 0.2s; font-size: 11px; width: 100%;";
+    undoBtn.addEventListener("mouseenter", () => { undoBtn.style.background = "rgba(239,68,68,0.25)"; });
+    undoBtn.addEventListener("mouseleave", () => { undoBtn.style.background = "rgba(239,68,68,0.15)"; });
+    undoBtn.addEventListener("click", () => {
+      if (!video) video = findVideo();
+      if (video && preSyncPosition !== null) {
+        video.currentTime = preSyncPosition;
+        showFlash("play", `Reverted to ${preSyncPosition.toFixed(1)}s`);
+      }
+      undoBtn.remove();
+      preSyncPosition = null;
+      preSyncTimestamp = null;
+    });
+
+    // Insert after the sync button
+    const syncBtnEl = controls.querySelector("#__pp_sync_btn");
+    if (syncBtnEl && syncBtnEl.nextSibling) {
+      controls.insertBefore(undoBtn, syncBtnEl.nextSibling);
+    } else {
+      controls.appendChild(undoBtn);
+    }
+
+    // Auto-remove after 6 seconds
+    setTimeout(() => { if (undoBtn.parentNode) undoBtn.remove(); }, 6000);
   }
 
   function showFlash(action, customLabel) {
@@ -1563,6 +1638,8 @@
       } else if (!message.partner) {
         partnerEmoji = "";
       }
+      // Update connection quality from background ping
+      if (typeof message.ping === "number") lastPingMs = message.ping;
       if (partnerName !== prevName) refreshSyncBtnLabel();
       // Don't claim any sync state until we actually have live data on both sides.
       // A partner record with just `{userId}` and no currentTime/url means they
@@ -1609,6 +1686,15 @@
         paused: video.paused
       });
       return true;
+    } else if (message.type === "TYPING_STATUS") {
+      // Partner started or stopped typing
+      partnerTyping = !!message.typing;
+      if (partnerTyping) {
+        // Auto-clear after 4s in case the clear event is missed
+        clearTimeout(typingClearTimer);
+        typingClearTimer = setTimeout(() => { partnerTyping = false; updateOverlay(); }, 4000);
+      }
+      updateOverlay();
     }
   });
 
@@ -1617,6 +1703,7 @@
     if (status?.currentRoom) {
       connected = true;
       peerCount = status.peerCount || 1;
+      if (typeof status.ping === "number") lastPingMs = status.ping;
       updateOverlay();
       startTabInfoTimer();
       sendTabInfo();

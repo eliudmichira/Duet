@@ -48,6 +48,7 @@ let presenceListenerOff = null;
 let metaListenerOff = null;
 let togListenerOff = null;
 let reactionsListenerOff = null;
+let typingListenerOff = null;
 
 let serverTimeOffset = 0;
 let partnerMeta = null;       // last meta we saw from the partner
@@ -358,6 +359,17 @@ function attachListeners(roomCode) {
   });
   metaListenerOff = () => meta.off("value", metaHandler);
 
+  // Typing indicator
+  const typingRef = db.ref(`rooms/${roomCode}/typing`);
+  const typingHandler = typingRef.on("value", (snap) => {
+    const data = snap.val() || {};
+    const partnerTyping = Object.entries(data)
+      .filter(([uid]) => uid !== myUserId)
+      .some(([_, v]) => v === true);
+    broadcastToVideoTabs({ type: "TYPING_STATUS", typing: partnerTyping });
+  });
+  typingListenerOff = () => typingRef.off("value", typingHandler);
+
   // Reactions
   const reacts = db.ref(`rooms/${roomCode}/reactions`);
   const reactsHandler = reacts.on("child_added", (snap) => {
@@ -371,10 +383,10 @@ function attachListeners(roomCode) {
 }
 
 function detachListeners() {
-  for (const off of [stateListenerOff, presenceListenerOff, metaListenerOff, togListenerOff, reactionsListenerOff]) {
+  for (const off of [stateListenerOff, presenceListenerOff, metaListenerOff, togListenerOff, reactionsListenerOff, typingListenerOff]) {
     try { off?.(); } catch {}
   }
-  stateListenerOff = presenceListenerOff = metaListenerOff = togListenerOff = reactionsListenerOff = null;
+  stateListenerOff = presenceListenerOff = metaListenerOff = togListenerOff = reactionsListenerOff = typingListenerOff = null;
 }
 
 // ── Peer-count transitions (auto-resync + together-timer) ──
@@ -550,6 +562,28 @@ async function validateRules() {
     }
   }
 }
+
+// ── Connection quality (ping measurement) ─────────────────
+let lastPingMs = null;
+let lastPingAt = 0;
+const PING_INTERVAL_MS = 5000;
+
+async function measurePing() {
+  if (!db || !currentRoom) return;
+  const pingRef = db.ref(`rooms/${currentRoom}/ping/${myUserId}`);
+  const start = Date.now();
+  try {
+    await pingRef.set(firebase.database.ServerValue.TIMESTAMP);
+    const snap = await pingRef.once("value");
+    lastPingMs = Date.now() - start;
+    lastPingAt = Date.now();
+  } catch {
+    lastPingMs = null;
+  }
+}
+
+// Measure ping periodically when in a room
+setInterval(() => { if (currentRoom && db) measurePing().catch(() => {}); }, PING_INTERVAL_MS);
 
 // ── Catch up to partner ─────────────────────────────────────
 // Seeks our local video to wherever the partner currently is. After the seek
@@ -789,7 +823,7 @@ function broadcastConnection(connected, peerCount) {
 function broadcastPartnerMeta() {
   chrome.runtime.sendMessage({ type: "POPUP_PARTNER_META", partner: partnerMeta, mine: myLastTabInfo }).catch(() => {});
   // Send status down to content scripts so the in-video badge knows the actual drift
-  broadcastToVideoTabs({ type: "SYNC_STATUS", partner: partnerMeta, mine: myLastTabInfo, serverNow: serverNow() });
+  broadcastToVideoTabs({ type: "SYNC_STATUS", partner: partnerMeta, mine: myLastTabInfo, serverNow: serverNow(), ping: lastPingMs });
 }
 
 // ── Open partner's URL ──────────────────────────────────────
@@ -907,8 +941,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             mine: myLastTabInfo,
             together: togetherInfo,
             serverNow: serverNow(),
+            ping: lastPingMs,
             diag
           });
+          break;
+        }
+
+        case "SEND_TYPING": {
+          // Broadcast typing indicator to partner
+          if (roomRef && myUserId) {
+            db.ref(`rooms/${currentRoom}/typing/${myUserId}`).set(true).catch(() => {});
+            // Auto-clear after 3 seconds
+            setTimeout(() => {
+              if (roomRef) db.ref(`rooms/${currentRoom}/typing/${myUserId}`).remove().catch(() => {});
+            }, 3000);
+          }
+          sendResponse({ ok: true });
           break;
         }
 
