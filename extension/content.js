@@ -54,6 +54,31 @@
     "e17055,c0392b","00b894,00897b","ff7675,d63031","fd79a8,e84393",
     "55efc4,00b894","81ecec,00cec9","ffeaa7,fab1a0","dfe6e9,b2bec3"
   ];
+  // ── Twemoji: replace Unicode emoji with Twitter SVG images ──
+  const TWEMOJI_CDN = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/";
+  // Regex matches emoji: BMP emoticons, supplemental symbols, modifier bases,
+  // flags, ZWJ sequences. Covers ~99% of common emoji.
+  const __EMOJI_RE = /(?:\u200d\ufe0f?|[\ufe0e\ufe0f])?|(?:\ud83c[\udde6-\uddff]){2}|\ud83c[\uddfa\uddf8]|\ud83d[\udc68\udc69\udc41\udc6b\udc6c\udc6d\udc6e\udc6f\udc70\udc71\udc72\udc73\udc74\udc75\udc76\udc77\udc78\udc7f\udc80\udc81\udc82\udc83\udc84\udc85\udc86\udc87\udc88\udc89\udc8a\udc8b\udc8c\udc8d\udc8e\udc8f\udc90\udc91\udc92\udc93\udc94\udc95\udc96\udc97\udc98\udc99\udc9a\udc9b\udc9c\udc9d\udc9e\udc9f\udca0\udca1\udca2\udca3\udca4\udca5\udca6\udca7\udca8\udca9\udcaa\udcab\udcac\udcad\udcae\udcaf\udcb0\udcb1\udcb2\udcb3\udcb4\udcb5\udcb6\udcb7\udcb8\udcb9\udcba\udcbb\udcbc\udcbd\udcbe\udcbf\udcc0\udcc1\udcc2\udcc3\udcc4\udcc5\udcc6\udcc7\udcc8\udcc9\udcca\udccb\udccc\udccd\udcce\udccf\udcd0\udcd1\udcd2\udcd3\udcd4\udcd5\udcd6\udcd7\udcd8\udcd9\udcda\udcdb\udcdc\udcdd\udcde\udcdf\udce0\udce1\udce2\udce3\udce4\udce5\udce6\udce7\udce8\udce9\udcea\udceb\udcec\udced\udcee\udcef\udcf0\udcf1\udcf2\udcf3\udcf4\udcf5\udcf6\udcf7\udcf8\udcf9\udcfa\udcfb\udcfc\udcfd\udcfe\udcff|\ud83d[\ude00-\ude4f]|\ud83d[\ude80-\udeff]|\ud83e[\udd00-\uddef\uddf0-\uddff]|\u2702-\u27b0]|\u24c2\ud83c[\udc04\udccf\udde6-\uddff\ude02-\ude0a\ude10-\ude12\ude15-\ude2c\ude2e-\ude35\ude37-\ude3a\ude50-\ude51\udf00-\udfff]|\u2600-\u26ff|\u2700-\u27bf|\ufe0f|\u200d|\u2934-\u2935|\u25aa-\u25ab|\u25b6|\u25c0|\u25fb-\u25fe|\u2b05-\u2b07|\u2b1b-\u2b1c|\u2b50|\u2b55|\u3030|\u303d|\u3297|\u3299|\ud83c[\udc00-\udfff]/g;
+  function twemojiCodePoints(str) {
+    const cps = [];
+    for (let i = 0; i < str.length; i++) {
+      let cp = str.codePointAt(i);
+      if (cp > 0xFFFF) i++; // skip surrogate pair
+      cps.push(cp.toString(16));
+    }
+    return cps.join("-");
+  }
+  function twemojiHtml(text) {
+    if (!text || typeof text !== "string") return text;
+    return text.replace(/\p{Emoji_Presentation}|\p{Emoji}\uFE0F/gu, function(match) {
+      const cp = twemojiCodePoints(match);
+      return '<img class="twemoji" draggable="false" alt="' + match + '" src="' + TWEMOJI_CDN + cp + '.svg" style="display:inline-block;width:1.1em;height:1.1em;vertical-align:-0.15em;">';
+    });
+  }
+  function isEmojiOnly(str) {
+    return typeof str === "string" && /^\s*(?:\p{Emoji_Presentation}|\p{Emoji}\uFE0F|\s)+\s*$/u.test(str);
+  }
+
   function isAvatarCode(v) { return typeof v === "string" && /^av:\d{2}$/.test(v); }
   function avatarUrl(code) {
     if (!isAvatarCode(code)) return null;
@@ -72,7 +97,7 @@
       return `<img src="${url}" alt="" style="width:${px}px;height:${px}px;border-radius:50%;display:inline-block;vertical-align:middle;object-fit:cover;flex-shrink:0;">`;
     }
     if (typeof value === "string" && value.length > 0 && value.length <= 4) {
-      return `<span style="font-size:${px}px;line-height:1;display:inline-block;vertical-align:middle;">${value}</span>`;
+      return `<span style="font-size:${px}px;line-height:1;display:inline-block;vertical-align:middle;">${twemojiHtml(value)}</span>`;
     }
     return "";
   }
@@ -549,27 +574,6 @@
   // ── Visual Feedback (overlay + flash) ──────────────────────
   // The overlay (badge + flash) renders only in the frame that currently
   // OWNS the badge — top frame by default, fullscreen iframe when one is.
-  // Inject NotoColorEmoji font so emoji render consistently across platforms
-  function injectEmojiFont() {
-    if (document.getElementById("__duet_emoji_font")) return;
-    const style = document.createElement("style");
-    style.id = "__duet_emoji_font";
-    style.textContent = `
-      @font-face {
-        font-family: 'NotoColorEmoji';
-        src: url('${chrome.runtime.getURL("NotoColorEmoji.ttf")}') format('truetype');
-        font-weight: normal;
-        font-style: normal;
-        font-display: swap;
-      }
-      #__duet_overlay *, .__duet_emoji {
-        font-family: 'NotoColorEmoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Emoji', sans-serif;
-      }
-    `;
-    (document.head || document.documentElement).appendChild(style);
-  }
-  injectEmojiFont();
-
   function ensureOverlay() {
     if (!frameOwnsBadge) return null;
     let overlay = document.getElementById("__duet_overlay");
@@ -773,7 +777,7 @@
         <div style="height: 1px; background: rgba(255,255,255,0.1); width: 100%; margin-bottom: 2px;"></div>
         <button id="__pp_sync_btn" aria-label="Sync partner to my current timestamp" style="background: rgba(255,255,255,0.1); border: none; color: white; border-radius: 6px; padding: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s; font-size: 11px;">${syncBtnDefaultLabel()}</button>
         <div style="display: flex; gap: 6px; align-items: center;">
-          ${['😂', '💖', '🔥', '😭'].map(e => `<button class="__pp_re_btn" data-emoji="${e}" aria-label="Send ${e} reaction" style="background: rgba(255,255,255,0.05); border: none; border-radius: 6px; cursor: pointer; font-size: 15px; padding: 4px 6px; transition: background 0.2s; flex: 1;">${e}</button>`).join('')}
+          ${['😂', '💖', '🔥', '😭'].map(e => `<button class="__pp_re_btn" data-emoji="${e}" aria-label="Send ${e} reaction" style="background: rgba(255,255,255,0.05); border: none; border-radius: 6px; cursor: pointer; font-size: 15px; padding: 4px 6px; transition: background 0.2s; flex: 1;">${twemojiHtml(e)}</button>`).join('')}
           <button id="__pp_more_emojis" title="More emojis" aria-label="Open full emoji picker" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 700; padding: 4px 8px; color: rgba(244,241,234,0.7); flex-shrink: 0;">+</button>
         </div>
         <div style="position: relative;">
@@ -910,7 +914,7 @@
         }
         for (const emoji of list) {
           const b = document.createElement("button");
-          b.textContent = emoji;
+          b.innerHTML = twemojiHtml(emoji);
           b.style.cssText = `
             background: none; border: none; cursor: pointer;
             font-size: 18px; padding: 4px; border-radius: 6px;
@@ -1027,7 +1031,7 @@
         <span style="width:7px;height:7px;border-radius:50%;background:${color};box-shadow:0 0 8px ${color}, 0 0 0 3px ${color}1f;display:inline-block;transition:all 0.3s;"></span>
         <span style="background:linear-gradient(110deg,#ffc89a,#f472b6,#8b5cf6);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700">Duet</span>
         <span style="color:rgba(244,241,234,0.55);font-weight:500">·</span>
-        <span style="font-size:12px;line-height:1;">${emoji}</span>
+        <span style="font-size:12px;line-height:1;">${twemojiHtml(emoji)}</span>
         <span style="color:rgba(244,241,234,0.85);transition:color 0.3s;flex:1;">${text}</span>
         <button id="__pp_min_btn" title="Minimize to tray" style="background:rgba(255,255,255,0.06);border:none;color:rgba(244,241,234,0.7);width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;display:grid;place-items:center;padding:0;margin-left:4px;">−</button>
       `;
@@ -1043,7 +1047,7 @@
       if (tray) {
         tray.innerHTML = `
           <span style="width:8px;height:8px;border-radius:50%;background:${color};box-shadow:0 0 8px ${color};display:inline-block;"></span>
-          <span style="font-size:14px;line-height:1;">${emoji}</span>
+          <span style="font-size:14px;line-height:1;">${twemojiHtml(emoji)}</span>
         `;
       }
       applyMinimizedDom();
@@ -1105,7 +1109,7 @@
     const iconMarkup = avatarMarkup
       ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;overflow:hidden;flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,0.10);">${avatarMarkup}</span>`
       : `<span style="display:grid;place-items:center;width:22px;height:22px;border-radius:7px;background:${accent}1a;color:${accent};box-shadow:0 0 0 1px ${accent}33 inset">${glyph}</span>`;
-    flash.innerHTML = `${iconMarkup}<span>${label}</span>`;
+    flash.innerHTML = `${iconMarkup}<span>${twemojiHtml(label)}</span>`;
     flash.style.opacity = "1";
     flash.style.transform = "translateY(0) scale(1)";
     clearTimeout(flash.__t);
@@ -1230,7 +1234,7 @@
 
   function spawnFloatingEmoji(emoji, fromSelf) {
     const node = document.createElement("div");
-    node.textContent = emoji;
+    node.innerHTML = twemojiHtml(emoji);
     const startX = fromSelf
       ? 60 + Math.random() * 30        // self → right-ish (60-90%)
       : 10 + Math.random() * 30;       // partner → left-ish (10-40%)
