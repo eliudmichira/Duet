@@ -214,15 +214,18 @@ SUBMISSION.md                 # This document
 
 ---
 
-## Improvement Changelog
+## Design Iteration Log
 
-| Stage | What was tried | Evidence | Decision |
+This table documents the iterative design process within the build session. All iterations happened within a single development session and were committed together — there are not separate git commits per iteration. The evidence column cites test results and code structure, not individual commits.
+
+| Phase | What was added | Why | How we knew to proceed |
 |---|---|---|---|
-| Baseline | Generic `<video>` polling only | Fails on shadow-DOM players | Established starting point |
-| Iteration 1 | Added site-analyzer | Detected shadow-DOM video but no adapter | Added adapter-generator |
-| Iteration 2 | Added 5 strategy templates | Adapters generated but some failed syntax | Added sandbox-tester |
-| Iteration 3 | Added registry + LRU caching | Repeated runs faster, no re-generation | Kept |
-| Final | Full pipeline | 4/4 test strategies validated | Main contribution: strategy selection + validation |
+| Baseline audit | Analyzed existing `content.js` | Needed to understand the starting point | Generic `<video>` polling fails on shadow-DOM players |
+| Phase 1 | Site analyzer (`site-analyzer.js`) | Detection without generation isn't useful alone | Analyzer correctly identified shadow-DOM video elements |
+| Phase 2 | 5 strategy templates (`adapter-generator.js`) | Detection needed a response — generate an adapter | Templates produce valid code but syntax errors in some strategies |
+| Phase 3 | Sandbox tester (`sandbox-tester.js`) | Generated code needed validation before injection | Tester catches syntax errors, missing exports, XSS pitfalls |
+| Phase 4 | Registry + LRU caching (`adapter-registry.js`) | Repeated visits shouldn't re-generate identical adapters | Registry round-trip test passes, adapters persist across sessions |
+| Final | Full pipeline + integration | All stages wired together end-to-end | 4/4 test strategies produce validated adapters |
 
 ---
 
@@ -289,9 +292,17 @@ cd extension && node -e "JSON.parse(require('fs').readFileSync('manifest.json','
 
 ---
 
-## Trajectories
+## Build Provenance
 
-Agent trajectories: this conversation (chat log) plus h5i traces in `.claude/` document the build process, including THINK/NOTE traces and strategy-selection decisions. Use `h5i context` to review the reasoning chain.
+The workflow was built in a single AI-assisted development session. The evidence for the build process exists in three forms:
+
+1. **Git history.** Two commits on Aug 30, 2026 (timestamps `02:21` and `03:41`) added the `agent/` directory and modified `content.js`/`manifest.json`. Prior commits (April–July 2026) establish the pre-existing extension.
+
+2. **Chat log.** The full conversation with the AI agent that wrote the code is available as a screen-recordable session transcript. This is the primary trajectory artifact — it contains the iterative reasoning, design decisions, test runs, and course corrections.
+
+3. **h5i configuration.** The `.claude/h5i.md` file contains the h5i tool's instruction schema for recording THINK/NOTE traces. The h5i trace data itself is stored in git refs (`refs/h5i/*`) and requires `h5i push` to be exported — this has not been run, so trace data is not in the public repo.
+
+For the hackathon video, we recommend screen-recording the chat log to demonstrate the build process, as this is the most complete and honest artifact.
 
 ---
 
