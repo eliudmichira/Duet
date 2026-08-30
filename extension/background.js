@@ -102,6 +102,11 @@ function explainFirebaseError(op, message) {
 }
 
 // ── Firebase Setup ──────────────────────────────────────────
+// Exponential backoff retry for Firebase connection.
+// Pattern: 1s → 2s → 4s → 8s → 16s (max), then stays at 16s.
+let firebaseRetryAttempt = 0;
+const FIREBASE_MAX_RETRY_MS = 16000;
+
 async function initFirebase() {
   if (db) return true;
   await Promise.all(firebase.apps.map(app => app.delete()));
@@ -111,6 +116,28 @@ async function initFirebase() {
   db.ref(".info/serverTimeOffset").on("value", (snap) => {
     serverTimeOffset = snap.val() || 0;
   });
+
+  // Monitor connection state for automatic reconnection
+  db.ref(".info/connected").on("value", (snap) => {
+    if (snap.val() === false) {
+      // Disconnected — schedule retry with backoff
+      firebaseRetryAttempt++;
+      const delay = Math.min(FIREBASE_MAX_RETRY_MS, 1000 * Math.pow(2, firebaseRetryAttempt));
+      dlog(`[Duet] Firebase disconnected, retrying in ${delay}ms (attempt ${firebaseRetryAttempt})`);
+      setTimeout(() => {
+        if (!db) {
+          initFirebase().catch(() => {});
+        }
+      }, delay);
+    } else {
+      // Connected — reset backoff
+      if (firebaseRetryAttempt > 0) {
+        dlog("[Duet] Firebase reconnected");
+        firebaseRetryAttempt = 0;
+      }
+    }
+  });
+
   return true;
 }
 

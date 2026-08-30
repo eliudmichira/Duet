@@ -72,8 +72,38 @@
     if (!text || typeof text !== "string") return text;
     return text.replace(/\p{Emoji_Presentation}|\p{Emoji}\uFE0F/gu, function(match) {
       const cp = twemojiCodePoints(match);
-      return '<img class="twemoji" draggable="false" alt="' + match + '" src="' + TWEMOJI_CDN + cp + '.svg" style="display:inline-block;width:1.1em;height:1.1em;vertical-align:-0.15em;">';
+      // CSP-safe: use img tag with src attribute (no inline styles, no eval)
+      return '<img class="twemoji" draggable="false" alt="' + match.replace(/"/g, '&quot;') + '" src="' + TWEMOJI_CDN + cp + '.svg" width="16" height="16" style="display:inline-block;width:1.1em;height:1.1em;vertical-align:-0.15em;">';
     });
+  }
+  // DOM-safe version for non-innerHTML contexts
+  function twemojiReplace(parentEl) {
+    if (!parentEl) return;
+    const walker = document.createTreeWalker(parentEl, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    for (const node of textNodes) {
+      const text = node.textContent;
+      if (!text || !/\p{Emoji_Presentation}|\p{Emoji}\uFE0F/u.test(text)) continue;
+      const frag = document.createDocumentFragment();
+      let lastIdx = 0;
+      const re = /\p{Emoji_Presentation}|\p{Emoji}\uFE0F/gu;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        if (m.index > lastIdx) frag.appendChild(document.createTextNode(text.slice(lastIdx, m.index)));
+        const img = document.createElement("img");
+        img.className = "twemoji";
+        img.alt = m[0];
+        img.draggable = false;
+        img.width = 16; img.height = 16;
+        img.style.cssText = "display:inline-block;width:1.1em;height:1.1em;vertical-align:-0.15em;";
+        img.src = TWEMOJI_CDN + twemojiCodePoints(m[0]) + ".svg";
+        frag.appendChild(img);
+        lastIdx = re.lastIndex;
+      }
+      if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+      node.parentNode.replaceChild(frag, node);
+    }
   }
   function isEmojiOnly(str) {
     return typeof str === "string" && /^\s*(?:\p{Emoji_Presentation}|\p{Emoji}\uFE0F|\s)+\s*$/u.test(str);
@@ -293,15 +323,78 @@
     sendTabInfo(true); // immediately push our metadata
   }
 
-  // Streaming sites often keep old video elements hidden in the DOM.
-  // Polling continuously ensures we always lock onto the currently visible video.
-  setInterval(() => {
-    if (!extAlive()) return;
-    const best = findVideo();
-    if (best && best !== video) {
-      attachListeners(best);
+  // ── MutationObserver: instant video detection (replaces 1.5s polling) ──
+  // Watches for DOM changes (new elements, attribute changes, shadow roots)
+  // and re-checks for video elements. Falls back to polling if observer fails.
+  function startVideoObserver() {
+    let debounceTimer = null;
+    const check = () => {
+      if (!extAlive()) return;
+      const best = findVideo();
+      if (best && best !== video) attachListeners(best);
+    };
+    const debouncedCheck = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(check, 150);
+    };
+
+    try {
+      const observer = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          // New nodes added — check for video elements
+          if (m.type === "childList" && m.addedNodes.length) {
+            debouncedCheck();
+            return;
+          }
+          // Attribute changed on a video-like element
+          if (m.type === "attributes" && m.target?.tagName === "VIDEO") {
+            debouncedCheck();
+            return;
+          }
+        }
+      });
+      observer.observe(document.documentElement, {
+        childList: true, subtree: true, attributes: true,
+        attributeFilter: ["src", "style", "class"]
+      });
+      // Initial check + light polling fallback (10s) for edge cases
+      check();
+      setInterval(() => { if (extAlive()) check(); }, 10000);
+    } catch {
+      // MutationObserver failed — fall back to polling
+      setInterval(() => {
+        if (!extAlive()) return;
+        const best = findVideo();
+        if (best && best !== video) attachListeners(best);
+      }, 1500);
     }
-  }, 1500);
+  }
+  startVideoObserver();
+
+  // ── Keyboard shortcuts ─────────────────────────────────────
+  // Ctrl+Shift+S = sync partner to me
+  // Ctrl+Shift+1-4 = send reactions (😂 💖 🔥 😭)
+  document.addEventListener("keydown", (e) => {
+    if (!extAlive() || !connected) return;
+    if (!e.ctrlKey || !e.shiftKey) return;
+    const key = e.key;
+    if (key === "S" || key === "s") {
+      e.preventDefault();
+      safeSend({ type: "SYNC_TO_ME" }).then((res) => {
+        if (res?.ok) showFlash("play", "Synced partner to you");
+        else if (res?.error) showFlash("pause", res.error);
+      });
+    } else if (key >= "1" && key <= "4") {
+      e.preventDefault();
+      const reactions = ["😂", "💖", "🔥", "😭"];
+      const idx = parseInt(key) - 1;
+      if (reactions[idx]) {
+        safeSend({ type: "SEND_REACTION", emoji: reactions[idx] });
+        spawnReaction(reactions[idx], { fromSelf: true });
+        recordRecentEmoji(reactions[idx]);
+      }
+    }
+  }, true);
 
   // ── Send local action ──────────────────────────────────────
   function sendSync(action) {
