@@ -72,8 +72,10 @@ const diag = {
   partnerUserId:  null,
   primaryTabId:   null,
   peerCount:      0,
-  ruleHints:      []
+  ruleHints:      [],
+  syncEvents:     []  // ring buffer of recent sync events for diagnostics
 };
+const SYNC_EVENT_MAX = 50;
 
 function recordOk(op) {
   diag.lastWriteOk = { op, at: Date.now() };
@@ -963,6 +965,39 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "PING":
           sendResponse({ ok: true });
           break;
+
+        case "LOG_SYNC_EVENT": {
+          const evt = message.event;
+          if (evt) {
+            diag.syncEvents.push(evt);
+            if (diag.syncEvents.length > SYNC_EVENT_MAX) diag.syncEvents.shift();
+          }
+          sendResponse({ ok: true });
+          break;
+        }
+
+        case "INJECT_AGENT_SCRIPTS": {
+          // Lazy-load agent modules into the requesting tab on demand.
+          // Avoids loading ~200KB of agent JS on every page.
+          const tabId = message.tabId;
+          if (!tabId) { sendResponse({ error: "No tabId" }); break; }
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId, allFrames: true },
+              files: [
+                "agent/site-analyzer.js",
+                "agent/adapter-generator.js",
+                "agent/adapter-registry.js",
+                "agent/sandbox-tester.js",
+                "agent/agent.js"
+              ]
+            });
+            sendResponse({ ok: true });
+          } catch (err) {
+            sendResponse({ error: err?.message || String(err) });
+          }
+          break;
+        }
 
         default:
           sendResponse({ error: "Unknown message type" });

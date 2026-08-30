@@ -10,29 +10,55 @@
   const DEBUG = false;
   const dlog = (...args) => { if (DEBUG) console.log(...args); };
 
+  // ── Centralized State Machine ─────────────────────────────
+  // All reactive state lives here. Call setState() to update and trigger render.
+  const S = {
+    // Connection
+    connected: false,
+    peerCount: 0,
+    lastPingMs: null,
+    // Sync
+    driftStatus: "waiting", // waiting | sync | warning | out_of_sync | mismatch
+    isApplyingRemote: false,
+    partnerTyping: false,
+    // Partners
+    partnerName: "",
+    partnerEmoji: "",
+  };
+  let _renderQueued = false;
+  function setState(patch) {
+    Object.assign(S, patch);
+    if (!_renderQueued) {
+      _renderQueued = true;
+      queueMicrotask(() => { _renderQueued = false; render(); });
+    }
+  }
+
+  // ── Sync Event Ring Buffer ────────────────────────────────
+  // Last 100 events with timestamps for debugging and diagnostics.
+  const SYNC_LOG_MAX = 100;
+  const syncEventLog = [];
+  function logSyncEvent(type, detail) {
+    const evt = { t: Date.now(), type, ...detail };
+    syncEventLog.push(evt);
+    if (syncEventLog.length > SYNC_LOG_MAX) syncEventLog.shift();
+    // Forward to background for popup diagnostics
+    safeSend({ type: "LOG_SYNC_EVENT", event: evt });
+  }
+
+  // Non-reactive state (doesn't trigger render)
   let video = null;
-  let isApplyingRemote = false;
   let expectedRemoteEvents = new Set();
   let applySettleTimer = null;
   let applySafetyTimer = null;
-  let connected = false;
-  let peerCount = 0;
   let lastSentSig = "";
   let lastSentAt = 0;
   let lastTabInfoAt = 0;
   let tabInfoTimer = null;
-  let contextInvalid = false; // set true once the extension is reloaded/uninstalled
-  let partnerName = "";       // last known display name of the partner (from SYNC_STATUS)
-  let partnerEmoji = "";      // last known avatar emoji of the partner
-  let myEmoji = "";           // my own avatar (cached from storage for self chat bubbles)
-  let agentAdapter = null;    // generated adapter from DuetAgent (if active)
+  let contextInvalid = false;
+  let myEmoji = "";
+  let agentAdapter = null;
   let agentInitialized = false;
-
-  // Connection quality (ping from background)
-  let lastPingMs = null;
-
-  // Typing indicator state
-  let partnerTyping = false;
   let typingClearTimer = null;
 
   // Undo sync: save position before catch-up so user can revert
@@ -144,7 +170,7 @@
   }
 
   function syncBtnDefaultLabel() {
-    return `Catch up to ${partnerName || "partner"}`;
+    return `Catch up to ${S.partnerName || "partner"}`;
   }
 
   // Persist a chosen emoji to the recents list shared with the popup picker
@@ -187,14 +213,14 @@
   // the flag once they all arrive (with a small grace period for late-firing
   // events like 'playing' on slow streams) or after a 2s safety net.
   function endApplyingRemote() {
-    isApplyingRemote = false;
+    S.isApplyingRemote = false;
     expectedRemoteEvents.clear();
     if (applySettleTimer) { clearTimeout(applySettleTimer); applySettleTimer = null; }
     if (applySafetyTimer) { clearTimeout(applySafetyTimer); applySafetyTimer = null; }
   }
   // Returns true if the event was an expected echo (caller should NOT broadcast).
   function consumeRemoteEvent(name) {
-    if (!isApplyingRemote) return false;
+    if (!S.isApplyingRemote) return false;
     if (!expectedRemoteEvents.has(name)) {
       // Still in the apply window but this event wasn't expected — likely a
       // delayed echo (e.g., 'playing' after we already cleared 'play'). Treat
@@ -246,15 +272,30 @@
   const AGENT_FALLBACK_THRESHOLD = 3; // after 3 failed polls, try the agent
 
   async function tryAgentFallback() {
-    if (!window.DuetAgent || agentInitialized) return null;
+    if (agentInitialized) return null;
     try {
       agentInitialized = true;
-      dlog("[Duet Agent] Standard detection failed, running agent analysis...");
+      dlog("[Duet Agent] Standard detection failed, lazy-loading agent modules...");
+      // Lazy-load agent scripts via background (avoids ~200KB on every page)
+      if (!window.DuetAgent) {
+        const tab = await new Promise((resolve) => {
+          try { chrome.tabs.getCurrent(resolve); } catch { resolve(null); }
+        });
+        if (tab?.id) {
+          await safeSend({ type: "INJECT_AGENT_SCRIPTS", tabId: tab.id });
+        }
+      }
+      // Wait briefly for scripts to initialize
+      await new Promise(r => setTimeout(r, 100));
+      if (!window.DuetAgent) {
+        dlog("[Duet Agent] Scripts not loaded after injection");
+        return null;
+      }
+      dlog("[Duet Agent] Running agent analysis...");
       const result = await DuetAgent.analyze(location.href, { skipTest: true });
       if (result?.adapter) {
         agentAdapter = result.adapter;
         dlog(`[Duet Agent] Adapter loaded: ${result.adapter.id} (${result.adapter.strategy})`);
-        // The adapter exposes window.__duetAdapter
         if (window.__duetAdapter) {
           const v = window.__duetAdapter.findVideo();
           if (v) return v;
@@ -317,7 +358,7 @@
     v.addEventListener("seeked",     guard(() => { if (consumeRemoteEvent("seeked"))  return; sendSync(v.paused ? "pause" : "play"); sendTabInfo(true); }));
     v.addEventListener("ratechange", guard(() => { if (consumeRemoteEvent("ratechange")) return; sendSync(v.paused ? "pause" : "play"); sendTabInfo(true); }));
     v.addEventListener("waiting",    guard(() => {
-      if (isApplyingRemote) return;
+      if (S.isApplyingRemote) return;
       sendSync("pause");
       // Throttle: only ping the partner once per ~5s so a stuttering stream
       // doesn't spam them.
@@ -330,7 +371,7 @@
     v.addEventListener("playing",    guard(() => { if (consumeRemoteEvent("playing")) return; sendSync("play");  sendTabInfo(true); }));
     v.addEventListener("timeupdate", guard(() => { sendTabInfo(); }));
     dlog("[Duet] Attached to active video player.");
-    updateOverlay();
+    render();
     sendTabInfo(true); // immediately push our metadata
   }
 
@@ -386,7 +427,7 @@
   // Ctrl+Shift+S = sync partner to me
   // Ctrl+Shift+1-4 = send reactions (😂 💖 🔥 😭)
   document.addEventListener("keydown", (e) => {
-    if (!extAlive() || !connected) return;
+    if (!extAlive() || !S.connected) return;
     if (!e.ctrlKey || !e.shiftKey) return;
     const key = e.key;
     if (key === "S" || key === "s") {
@@ -409,12 +450,13 @@
 
   // ── Send local action ──────────────────────────────────────
   function sendSync(action) {
-    if (isApplyingRemote || !connected || !video) return;
+    if (S.isApplyingRemote || !S.connected || !video) return;
     const sig = `${action}|${video.currentTime.toFixed(2)}`;
     const now = Date.now();
     if (sig === lastSentSig && now - lastSentAt < 250) return;
     lastSentSig = sig;
     lastSentAt = now;
+    logSyncEvent("LOCAL_SYNC", { action, time: video.currentTime });
 
     safeSend({
       type: "SYNC_EVENT",
@@ -435,7 +477,7 @@
 
     // Reset any in-flight apply window so we don't carry stale expectations.
     endApplyingRemote();
-    isApplyingRemote = true;
+    S.isApplyingRemote = true;
     const expected = new Set();
 
     let targetTime = state.currentTime;
@@ -463,7 +505,7 @@
       video.pause();
     }
 
-    showFlash(state.action, state.force ? `${partnerName || "Partner"} re-synced you` : null);
+    showFlash(state.action, state.force ? `${S.partnerName || "Partner"} re-synced you` : null);
 
     expectedRemoteEvents = expected;
     if (expected.size === 0) {
@@ -553,7 +595,7 @@
       if (data.url !== topFrameUrl) {
         topFrameUrl = data.url;
         // Re-publish with the corrected URL right away so the partner card flips fast.
-        if (connected && video) sendTabInfo(true);
+        if (S.connected && video) sendTabInfo(true);
       }
     });
     // Ask the parent on load (covers Referrer-Policy: no-referrer)
@@ -566,7 +608,7 @@
   }
 
   function sendTabInfo(force = false) {
-    if (!connected || !video) return;
+    if (!S.connected || !video) return;
     // Only frames with a real, loaded video may publish metadata.
     // Empty ad/sidecar iframes have duration === 0 (or NaN) and are filtered
     // here. Live streams (HLS/DASH) have duration === Infinity, which passes
@@ -610,7 +652,7 @@
       if (overlay) overlay.style.display = "flex";
       // Force a re-render so the badge picks up any state changes that
       // happened while we didn't own it.
-      try { updateOverlay(); } catch {}
+      try { render(); } catch {}
     } else if (overlay) {
       overlay.style.display = "none";
     }
@@ -843,7 +885,7 @@
     handle.addEventListener("pointercancel", finish);
   }
 
-  function updateOverlay() {
+  function render() {
     if (!frameOwnsBadge) return;
     const overlay = ensureOverlay();
     let badge = document.getElementById("__duet_badge");
@@ -914,7 +956,7 @@
       badge.appendChild(controls);
 
       // Interactions
-      badge.addEventListener('mouseenter', () => { if(connected) controls.style.display = 'flex'; });
+      badge.addEventListener('mouseenter', () => { if(S.connected) controls.style.display = 'flex'; });
       badge.addEventListener('mouseleave', () => {
         // Don't collapse while the chat input is focused
         if (controls.dataset.locked === '1') return;
@@ -933,7 +975,7 @@
           preSyncTimestamp = Date.now();
         }
         syncBtn.disabled = true;
-        const who = partnerName || "partner";
+        const who = S.partnerName || "partner";
         syncBtn.textContent = "Catching up…";
         showFlash("play", `Catching up to ${who}…`);
         const res = await safeSend({ type: "CATCH_UP_TO_PARTNER" });
@@ -1133,24 +1175,24 @@
       });
     }
     
-    if (connected) {
+    if (S.connected) {
       let color = "#ffc89a";
       let text = "waiting for partner";
-      let emoji = partnerEmoji || "👋";
+      let emoji = S.partnerEmoji || "👋";
 
-      if (peerCount >= 2) {
-        if (currentDriftStatus === "sync")           { color = "#5ee2a0"; text = partnerTyping ? "typing…" : "in sync";           emoji = partnerTyping ? "💬" : "💞"; }
-        else if (currentDriftStatus === "warning")   { color = "#fcd34d"; text = partnerTyping ? "typing…" : "slight delay";     emoji = partnerTyping ? "💬" : "⏳"; }
-        else if (currentDriftStatus === "out_of_sync") { color = "#ef4444"; text = partnerTyping ? "typing…" : "out of sync";    emoji = partnerTyping ? "💬" : "⚠️"; }
-        else if (currentDriftStatus === "mismatch")  { color = "#ef4444"; text = partnerTyping ? "typing…" : "different video"; emoji = partnerTyping ? "💬" : "🎬"; }
-        else                                          { color = "#ffc89a"; text = partnerTyping ? "typing…" : "waiting for video"; emoji = partnerTyping ? "💬" : "📺"; }
+      if (S.peerCount >= 2) {
+        if (S.driftStatus === "sync")           { color = "#5ee2a0"; text = S.partnerTyping ? "typing…" : "in sync";           emoji = S.partnerTyping ? "💬" : "💞"; }
+        else if (S.driftStatus === "warning")   { color = "#fcd34d"; text = S.partnerTyping ? "typing…" : "slight delay";     emoji = S.partnerTyping ? "💬" : "⏳"; }
+        else if (S.driftStatus === "out_of_sync") { color = "#ef4444"; text = S.partnerTyping ? "typing…" : "out of sync";    emoji = S.partnerTyping ? "💬" : "⚠️"; }
+        else if (S.driftStatus === "mismatch")  { color = "#ef4444"; text = S.partnerTyping ? "typing…" : "different video"; emoji = S.partnerTyping ? "💬" : "🎬"; }
+        else                                          { color = "#ffc89a"; text = S.partnerTyping ? "typing…" : "waiting for video"; emoji = S.partnerTyping ? "💬" : "📺"; }
       }
 
       // Connection quality: color-code ping
       let pingText = "";
-      if (typeof lastPingMs === "number") {
-        const pingColor = lastPingMs < 100 ? "#5ee2a0" : lastPingMs < 300 ? "#fcd34d" : "#ef4444";
-        pingText = `<span style="color:${pingColor};font-size:9px;font-weight:500;margin-left:2px;">${lastPingMs}ms</span>`;
+      if (typeof S.lastPingMs === "number") {
+        const pingColor = S.lastPingMs < 100 ? "#5ee2a0" : S.lastPingMs < 300 ? "#fcd34d" : "#ef4444";
+        pingText = `<span style="color:${pingColor};font-size:9px;font-weight:500;margin-left:2px;">${S.lastPingMs}ms</span>`;
       }
 
       const topbar = document.getElementById("__pp_topbar");
@@ -1269,11 +1311,11 @@
     const glyph = isPlay
       ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 1.5v9l8-4.5L3 1.5z" fill="currentColor"/></svg>'
       : '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="2.5" y="1.5" width="2.5" height="9" rx="0.7" fill="currentColor"/><rect x="7" y="1.5" width="2.5" height="9" rx="0.7" fill="currentColor"/></svg>';
-    const who = partnerName || "Partner";
+    const who = S.partnerName || "Partner";
     const label = customLabel || (isPlay ? `${who} played` : `${who} paused`);
     // Lead with partner's avatar (illustrated portrait or emoji fallback) so
     // the flash visually maps to who triggered it.
-    const avatarMarkup = avatarHtml(partnerEmoji, 22);
+    const avatarMarkup = avatarHtml(S.partnerEmoji, 22);
     const iconMarkup = avatarMarkup
       ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;overflow:hidden;flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,0.10);">${avatarMarkup}</span>`
       : `<span style="display:grid;place-items:center;width:22px;height:22px;border-radius:7px;background:${accent}1a;color:${accent};box-shadow:0 0 0 1px ${accent}33 inset">${glyph}</span>`;
@@ -1347,7 +1389,7 @@
     }
     const accent = kind === "leave" ? "#ff6b7a" : "#5ee2a0";
     const dot = `<span style="width:8px;height:8px;border-radius:50%;background:${accent};box-shadow:0 0 8px ${accent};display:inline-block;"></span>`;
-    const av = avatarHtml(partnerEmoji, 18);
+    const av = avatarHtml(S.partnerEmoji, 18);
     toast.innerHTML = `${av ? `<span style="display:inline-flex;width:18px;height:18px;border-radius:50%;overflow:hidden;">${av}</span>` : dot}<span>${text}</span>`;
     requestAnimationFrame(() => {
       toast.style.opacity = "1";
@@ -1387,7 +1429,7 @@
       `;
       (document.documentElement || document.body).appendChild(pill);
     }
-    const partnerLabel = partnerName ? `${partnerName}` : "Partner";
+    const partnerLabel = S.partnerName ? `${S.partnerName}` : "Partner";
     pill.textContent = text.replace(/^⏳ Buffering/i, `⏳ ${partnerLabel} is buffering`).replace(/\.{3,}$/, "…");
     requestAnimationFrame(() => {
       pill.style.opacity = "1";
@@ -1474,7 +1516,7 @@
     const accent = fromSelf ? "#c4b5fd" : "#ffc89a"; // violet vs peach
 
     // (4) Sender prefix.
-    const who = fromSelf ? "You" : (partnerName || "Partner");
+    const who = fromSelf ? "You" : (S.partnerName || "Partner");
 
     const node = document.createElement("div");
     // (6) Hover-to-pause needs pointer events on, but the wrapper is a strip
@@ -1513,7 +1555,7 @@
     `;
     // Tiny avatar inline with the sender label so attribution survives even
     // on bright frames where color contrast washes out.
-    const avatarVal = fromSelf ? myEmoji : partnerEmoji;
+    const avatarVal = fromSelf ? myEmoji : S.partnerEmoji;
     senderEl.innerHTML = `${avatarHtml(avatarVal, 14) || ""}<span>${who}</span>`;
 
     const textEl = document.createElement("span");
@@ -1599,81 +1641,79 @@
     (document.head || document.documentElement).appendChild(s);
   })();
 
-  let currentDriftStatus = "waiting"; // waiting, sync, warning, out_of_sync, mismatch
+  // currentDriftStatus → S.driftStatus (state machine)
   
   // ── Message Listener ───────────────────────────────────────
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "REMOTE_SYNC") {
+      logSyncEvent("REMOTE_SYNC", { action: message.state?.action, time: message.state?.currentTime });
       applySync(message.state, message.serverNow);
     } else if (message.type === "CONNECTION_STATUS") {
-      const wasConnected = connected;
-      const prevPeerCount = peerCount;
-      connected = !!message.connected;
-      peerCount = message.peerCount || 0;
-      updateOverlay();
-      if (connected && !wasConnected) startTabInfoTimer();
-      if (!connected && tabInfoTimer) { clearInterval(tabInfoTimer); tabInfoTimer = null; }
-      if (connected) sendTabInfo();
-      // Toast on partner presence transitions. Only fires after the first
-      // CONNECTION_STATUS so we don't spam a "joined" toast at startup.
+      const wasConnected = S.connected;
+      const prevPeerCount = S.peerCount;
+      const nextConnected = !!message.connected;
+      const nextPeerCount = message.peerCount || 0;
+      setState({ connected: nextConnected, peerCount: nextPeerCount });
+      if (nextConnected && !wasConnected) {
+        logSyncEvent("CONNECT", {});
+        startTabInfoTimer();
+      }
+      if (!nextConnected) {
+        logSyncEvent("DISCONNECT", {});
+        if (tabInfoTimer) { clearInterval(tabInfoTimer); tabInfoTimer = null; }
+      }
+      if (nextConnected) sendTabInfo();
+      // Toast on partner presence transitions.
       if (wasConnected) {
-        if (prevPeerCount < 2 && peerCount >= 2) {
-          showPresenceToast(`${partnerName || "Partner"} is here`, "join");
-        } else if (prevPeerCount >= 2 && peerCount < 2) {
-          showPresenceToast(`${partnerName || "Partner"} left the room`, "leave");
+        if (prevPeerCount < 2 && nextPeerCount >= 2) {
+          showPresenceToast(`${S.partnerName || "Partner"} is here`, "join");
+        } else if (prevPeerCount >= 2 && nextPeerCount < 2) {
+          showPresenceToast(`${S.partnerName || "Partner"} left the room`, "leave");
         }
       }
     } else if (message.type === "SHOW_REACTION") {
+      logSyncEvent("REACTION", { emoji: message.emoji, mine: !!message.mine });
       spawnReaction(message.emoji, { fromSelf: !!message.mine });
     } else if (message.type === "SYNC_STATUS") {
-      // Cache partner's display name for flash labels.
-      const prevName = partnerName;
+      // Cache partner info and compute drift status.
+      const prevName = S.partnerName;
+      const patch = {};
       if (message.partner && typeof message.partner.name === "string") {
-        partnerName = message.partner.name;
+        patch.partnerName = message.partner.name;
       } else if (!message.partner) {
-        partnerName = "";
+        patch.partnerName = "";
       }
       if (message.partner && typeof message.partner.emoji === "string") {
-        partnerEmoji = message.partner.emoji;
+        patch.partnerEmoji = message.partner.emoji;
       } else if (!message.partner) {
-        partnerEmoji = "";
+        patch.partnerEmoji = "";
       }
-      // Update connection quality from background ping
-      if (typeof message.ping === "number") lastPingMs = message.ping;
-      if (partnerName !== prevName) refreshSyncBtnLabel();
-      // Don't claim any sync state until we actually have live data on both sides.
-      // A partner record with just `{userId}` and no currentTime/url means they
-      // haven't published a video yet — we should say "waiting", not "in sync".
-      // 15s window matches the popup's three-state freshness model. Chrome
-      // throttles background tabs, so anything tighter flickered to "waiting"
-      // mid-watch on real connections.
+      if (typeof message.ping === "number") patch.lastPingMs = message.ping;
+      // Compute drift status
       const hasLiveData = (m) =>
         m && typeof m.currentTime === "number" && typeof m.url === "string" &&
         typeof m.lastSeen === "number" && (message.serverNow - m.lastSeen) < 15000;
 
-      if (peerCount < 2 || !hasLiveData(message.partner) || !hasLiveData(message.mine)) {
-        currentDriftStatus = "waiting";
-        updateOverlay();
-        return;
-      }
-
-      const norm = u => { try { const url = new URL(u); return url.origin + url.pathname + url.search; } catch { return u; } };
-      const mismatch = norm(message.mine.url) !== norm(message.partner.url);
-
-      if (mismatch) {
-        currentDriftStatus = "mismatch";
-      } else if (message.mine.paused || message.partner.paused) {
-        const drift = Math.abs((message.mine.currentTime || 0) - (message.partner.currentTime || 0));
-        currentDriftStatus = drift > 1.5 ? "out_of_sync" : "sync";
+      if (S.peerCount < 2 || !hasLiveData(message.partner) || !hasLiveData(message.mine)) {
+        patch.driftStatus = "waiting";
       } else {
-        const project = m => (m.currentTime || 0) + Math.max(0, (message.serverNow - m.lastSeen) / 1000);
-        const drift = Math.abs(project(message.mine) - project(message.partner));
-
-        if (drift > 2.0) currentDriftStatus = "out_of_sync";
-        else if (drift > 0.8) currentDriftStatus = "warning";
-        else currentDriftStatus = "sync";
+        const norm = u => { try { const url = new URL(u); return url.origin + url.pathname + url.search; } catch { return u; } };
+        const mismatch = norm(message.mine.url) !== norm(message.partner.url);
+        if (mismatch) {
+          patch.driftStatus = "mismatch";
+        } else if (message.mine.paused || message.partner.paused) {
+          const drift = Math.abs((message.mine.currentTime || 0) - (message.partner.currentTime || 0));
+          patch.driftStatus = drift > 1.5 ? "out_of_sync" : "sync";
+        } else {
+          const project = m => (m.currentTime || 0) + Math.max(0, (message.serverNow - m.lastSeen) / 1000);
+          const drift = Math.abs(project(message.mine) - project(message.partner));
+          if (drift > 2.0) patch.driftStatus = "out_of_sync";
+          else if (drift > 0.8) patch.driftStatus = "warning";
+          else patch.driftStatus = "sync";
+        }
       }
-      updateOverlay();
+      setState(patch);
+      if (patch.partnerName !== undefined && patch.partnerName !== prevName) refreshSyncBtnLabel();
       
     } else if (message.type === "GET_VIDEO_SNAPSHOT") {
       // Synchronous-ish: respond with current video state for sync-to-me
@@ -1688,23 +1728,20 @@
       return true;
     } else if (message.type === "TYPING_STATUS") {
       // Partner started or stopped typing
-      partnerTyping = !!message.typing;
-      if (partnerTyping) {
-        // Auto-clear after 4s in case the clear event is missed
+      const typing = !!message.typing;
+      setState({ partnerTyping: typing });
+      if (typing) {
         clearTimeout(typingClearTimer);
-        typingClearTimer = setTimeout(() => { partnerTyping = false; updateOverlay(); }, 4000);
+        typingClearTimer = setTimeout(() => { setState({ partnerTyping: false }); }, 4000);
       }
-      updateOverlay();
     }
   });
 
   // ── Initial status fetch ───────────────────────────────────
   safeSend({ type: "GET_STATUS" }).then((status) => {
     if (status?.currentRoom) {
-      connected = true;
-      peerCount = status.peerCount || 1;
-      if (typeof status.ping === "number") lastPingMs = status.ping;
-      updateOverlay();
+      setState({ connected: true, peerCount: status.peerCount || 1 });
+      if (typeof status.ping === "number") setState({ lastPingMs: status.ping });
       startTabInfoTimer();
       sendTabInfo();
     }

@@ -17,11 +17,6 @@
     {
       "matches": ["<all_urls>"],
       "js": [
-        "agent/site-analyzer.js",
-        "agent/adapter-generator.js",
-        "agent/adapter-registry.js",
-        "agent/sandbox-tester.js",
-        "agent/agent.js",
         "content.js"
       ],
       "run_at": "document_idle",

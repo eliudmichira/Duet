@@ -461,6 +461,26 @@ function renderDiag(d) {
   $("diag-me").textContent     = d.myUserId      || "—";
   $("diag-them").textContent   = d.partnerUserId || "—";
   $("diag-tab").textContent    = d.primaryTabId  != null ? `tab ${d.primaryTabId}` : "—";
+
+  // Sync event timeline
+  const timeline = $("sync-timeline");
+  if (timeline && d.syncEvents && d.syncEvents.length) {
+    const lines = d.syncEvents.slice(-20).map(e => {
+      const ago = Math.round((now - e.t) / 1000);
+      const timeStr = ago < 60 ? `${ago}s ago` : `${Math.round(ago/60)}m ago`;
+      const color = e.type.includes("ERROR") || e.type === "DISCONNECT" ? "#ef4444"
+        : e.type === "REMOTE_SYNC" ? "#60a5fa"
+        : e.type === "LOCAL_SYNC" ? "#5ee2a0"
+        : e.type === "CONNECT" ? "#a78bfa"
+        : "rgba(244,241,234,0.5)";
+      const detail = e.action ? ` [${e.action}${e.time != null ? ` @${e.time.toFixed(1)}s` : ""}]` : "";
+      return `<div style="color:${color};padding:1px 0;">${e.type}${detail} <span style="color:rgba(244,241,234,0.3);">${timeStr}</span></div>`;
+    });
+    timeline.innerHTML = lines.join("");
+    timeline.scrollTop = timeline.scrollHeight;
+  } else if (timeline) {
+    timeline.innerHTML = '<div style="color:rgba(244,241,234,0.3);padding:4px 0;">No sync events yet</div>';
+  }
 }
 
 function fmtAgo(sec) {
