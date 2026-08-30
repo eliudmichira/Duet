@@ -296,11 +296,11 @@ cd extension && node -e "JSON.parse(require('fs').readFileSync('manifest.json','
 
 The workflow was built in a single AI-assisted development session. The evidence for the build process exists in three forms:
 
-1. **Git history.** Two commits on Aug 30, 2026 (timestamps `02:21` and `03:41`) added the `agent/` directory and modified `content.js`/`manifest.json`. Prior commits (April–July 2026) establish the pre-existing extension.
+1. **Git history.** Two commits on Aug 30, 2026 (timestamps `02:21` and `03:41`) added the `agent/` directory and modified `content.js`/`manifest.json`. Prior commits (April–July 2026) establish the pre-existing extension. The commit-level history is verifiable: `git log --all --oneline` shows the full chain.
 
-2. **Chat log.** The full conversation with the AI agent that wrote the code is available as a screen-recordable session transcript. This is the primary trajectory artifact — it contains the iterative reasoning, design decisions, test runs, and course corrections.
+2. **Chat log (primary artifact).** The full conversation with the AI agent that wrote the code is available as a screen-recordable session transcript. It contains the iterative reasoning, design decisions, test runs, and course corrections — including this audit and the fixes applied in response. This is the most complete trajectory artifact.
 
-3. **h5i configuration.** The `.claude/h5i.md` file contains the h5i tool's instruction schema for recording THINK/NOTE traces. The h5i trace data itself is stored in git refs (`refs/h5i/*`) and requires `h5i push` to be exported — this has not been run, so trace data is not in the public repo.
+3. **h5i context data (partial).** A `refs/h5i/context` ref exists in the repo with THINK/NOTE/OBSERVE/ACT traces from the April 28 popup.js session (`trace.md`, `commit.md`, `main.md`). This predates the agent workflow and covers the earlier extension work. The Aug 30 agent build was done outside h5i tracking, so it has no h5i traces. The `.claude/h5i.md` file is the h5i tool's instruction schema, not trace data. The `h5i` binary (`h5i_bin/h5i.exe`) is Windows-only and cannot be run in this Linux environment.
 
 For the hackathon video, we recommend screen-recording the chat log to demonstrate the build process, as this is the most complete and honest artifact.
 
