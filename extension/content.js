@@ -549,6 +549,27 @@
   // ── Visual Feedback (overlay + flash) ──────────────────────
   // The overlay (badge + flash) renders only in the frame that currently
   // OWNS the badge — top frame by default, fullscreen iframe when one is.
+  // Inject NotoColorEmoji font so emoji render consistently across platforms
+  function injectEmojiFont() {
+    if (document.getElementById("__duet_emoji_font")) return;
+    const style = document.createElement("style");
+    style.id = "__duet_emoji_font";
+    style.textContent = `
+      @font-face {
+        font-family: 'NotoColorEmoji';
+        src: url('${chrome.runtime.getURL("NotoColorEmoji.ttf")}') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+        font-display: swap;
+      }
+      #__duet_overlay *, .__duet_emoji {
+        font-family: 'NotoColorEmoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Emoji', sans-serif;
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
+  injectEmojiFont();
+
   function ensureOverlay() {
     if (!frameOwnsBadge) return null;
     let overlay = document.getElementById("__duet_overlay");
