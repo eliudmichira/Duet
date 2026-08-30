@@ -28,15 +28,10 @@
     }
     h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
     .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
-    .stats {
-      display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap;
-    }
+    .stats { display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
     .stat-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 16px 24px;
-      flex: 1; min-width: 140px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px 24px; flex: 1; min-width: 140px;
     }
     .stat-card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
     .stat-card .value { font-size: 32px; font-weight: 800; margin-top: 4px; }
@@ -47,109 +42,50 @@
     .controls { display: flex; gap: 12px; margin-bottom: 24px; }
     .btn {
       background: linear-gradient(180deg, rgba(255,138,107,0.2), rgba(255,138,107,0.1));
-      border: 1px solid rgba(255,138,107,0.3);
-      color: var(--text);
-      border-radius: 999px;
-      padding: 10px 24px;
-      font-weight: 700;
-      font-size: 14px;
-      cursor: pointer;
-      transition: all 0.15s;
+      border: 1px solid rgba(255,138,107,0.3); color: var(--text);
+      border-radius: 999px; padding: 10px 24px; font-weight: 700; font-size: 14px;
+      cursor: pointer; transition: all 0.15s;
     }
     .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(255,138,107,0.3); }
     .btn:active { transform: translateY(0); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-    .btn.secondary {
-      background: var(--surface);
-      border-color: var(--border);
-    }
+    .btn.secondary { background: var(--surface); border-color: var(--border); }
     table {
-      width: 100%;
-      border-collapse: separate;
-      border-spacing: 0;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
+      width: 100%; border-collapse: separate; border-spacing: 0;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
     }
     th {
-      text-align: left;
-      padding: 12px 16px;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--muted);
-      border-bottom: 1px solid var(--border);
-      background: rgba(255,255,255,0.02);
+      text-align: left; padding: 12px 16px; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+      border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02);
     }
-    td {
-      padding: 12px 16px;
-      font-size: 13px;
-      border-bottom: 1px solid var(--border);
-      vertical-align: top;
-    }
+    td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: top; }
     tr:last-child td { border-bottom: none; }
     .site-name { font-weight: 700; }
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 700;
-    }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
     .badge.pass { background: rgba(94,226,160,0.15); color: var(--success); }
     .badge.fail { background: rgba(239,68,68,0.15); color: var(--error); }
     .badge.warn { background: rgba(252,211,77,0.15); color: var(--warning); }
     .badge.pending { background: rgba(255,255,255,0.08); color: var(--muted); }
-    .badge.na { background: rgba(255,255,255,0.04); color: rgba(244,241,234,0.3); }
-    .difficulty {
-      font-size: 11px;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-weight: 600;
-    }
+    .difficulty { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
     .difficulty.easy { background: rgba(94,226,160,0.1); color: var(--success); }
     .difficulty.medium { background: rgba(252,211,77,0.1); color: var(--warning); }
     .difficulty.hard { background: rgba(239,68,68,0.1); color: var(--error); }
     .notes { color: var(--muted); font-size: 12px; max-width: 200px; }
-    .progress-bar {
-      height: 4px;
-      background: var(--border);
-      border-radius: 2px;
-      margin-top: 8px;
-      overflow: hidden;
-    }
-    .progress-fill {
-      height: 100%;
-      background: var(--accent);
-      border-radius: 2px;
-      transition: width 0.3s;
-    }
+    .progress-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+    .progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s; }
     #results-log {
-      margin-top: 24px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 16px;
-      max-height: 300px;
-      overflow-y: auto;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 12px;
-      line-height: 1.6;
-      display: none;
+      margin-top: 24px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px; max-height: 300px; overflow-y: auto;
+      font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.6; display: none;
     }
     .log-entry { padding: 2px 0; }
     .log-entry.info { color: var(--muted); }
     .log-entry.success { color: var(--success); }
     .log-entry.error { color: var(--error); }
     .log-entry.warn { color: var(--warning); }
-    .summary {
-      margin-top: 32px;
-      padding: 24px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-    }
+    .summary { margin-top: 32px; padding: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
     .summary h2 { font-size: 18px; margin-bottom: 12px; }
     .summary p { color: var(--muted); font-size: 14px; line-height: 1.6; }
     .summary ul { margin-top: 12px; padding-left: 20px; }
@@ -165,26 +101,11 @@
   </p>
 
   <div class="stats">
-    <div class="stat-card">
-      <div class="label">Total Sites</div>
-      <div class="value accent" id="stat-total">10</div>
-    </div>
-    <div class="stat-card">
-      <div class="label">Detection</div>
-      <div class="value success" id="stat-detected">—</div>
-    </div>
-    <div class="stat-card">
-      <div class="label">Adapter Generated</div>
-      <div class="value warning" id="stat-generated">—</div>
-    </div>
-    <div class="stat-card">
-      <div class="label">Sandbox Pass</div>
-      <div class="value success" id="stat-passed">—</div>
-    </div>
-    <div class="stat-card">
-      <div class="label">Avg Confidence</div>
-      <div class="value" id="stat-confidence">—</div>
-    </div>
+    <div class="stat-card"><div class="label">Total Sites</div><div class="value accent" id="stat-total">10</div></div>
+    <div class="stat-card"><div class="label">Detection</div><div class="value success" id="stat-detected">—</div></div>
+    <div class="stat-card"><div class="label">Adapter Generated</div><div class="value warning" id="stat-generated">—</div></div>
+    <div class="stat-card"><div class="label">Sandbox Pass</div><div class="value success" id="stat-passed">—</div></div>
+    <div class="stat-card"><div class="label">Avg Confidence</div><div class="value" id="stat-confidence">—</div></div>
   </div>
 
   <div class="progress-bar"><div class="progress-fill" id="progress" style="width: 0%"></div></div>
@@ -198,18 +119,7 @@
 
   <table>
     <thead>
-      <tr>
-        <th>#</th>
-        <th>Site</th>
-        <th>Difficulty</th>
-        <th>Detection</th>
-        <th>Framework</th>
-        <th>Adapter</th>
-        <th>Strategy</th>
-        <th>Confidence</th>
-        <th>Sandbox</th>
-        <th>Notes</th>
-      </tr>
+      <tr><th>#</th><th>Site</th><th>Difficulty</th><th>Detection</th><th>Framework</th><th>Adapter</th><th>Strategy</th><th>Confidence</th><th>Sandbox</th><th>Notes</th></tr>
     </thead>
     <tbody id="test-results"></tbody>
   </table>
@@ -218,9 +128,7 @@
 
   <div class="summary">
     <h2>Test Panel Methodology</h2>
-    <p>
-      Each site is evaluated against the same pipeline the Duet Agent uses in production:
-    </p>
+    <p>Each site is evaluated against the same pipeline the Duet Agent uses in production:</p>
     <ul>
       <li><strong>Detection:</strong> Can the agent find a video element? (DOM scan, shadow DOM, iframe, custom API)</li>
       <li><strong>Framework:</strong> Is the player framework recognized? (YouTube, Vimeo, Netflix, etc.)</li>
@@ -238,7 +146,7 @@
     </p>
   </div>
 
-  <!-- Mock chrome.storage for modules that need it outside the extension -->
+  <!-- Mock chrome.storage so agent modules work outside the extension -->
   <script>
     if (!window.chrome) window.chrome = {};
     if (!window.chrome.storage) window.chrome.storage = {};
@@ -248,123 +156,116 @@
       remove: (keys, cb) => cb && cb()
     };
   </script>
-  <!-- Load actual agent modules -->
-  <script src="../extension/agent/adapter-generator.js"></script>
-  <script src="../extension/agent/sandbox-tester.js"></script>
-  <script src="../extension/agent/site-analyzer.js"></script>
+
+  <!-- INLINED: extension/agent/adapter-generator.js (inlined for file:// compatibility) -->
   <script>
-    // ── Test Definitions ───────────────────────────────────────
+const AdapterGenerator = (() => {
+  "use strict";
+  let _adapterCounter = 0;
+  function nextId() { return `adapter_${Date.now()}_${++_adapterCounter}`; }
+
+  function generate(analysis) {
+    const strategy = selectStrategy(analysis);
+    const code = buildAdapter(analysis, strategy);
+    return { id: nextId(), hostname: analysis.hostname, framework: analysis.framework, code, confidence: analysis.confidence, strategy: strategy.name, hooks: strategy.hooks, generatedAt: Date.now(), version: 1 };
+  }
+
+  function selectStrategy(analysis) {
+    if (analysis.framework !== "none" && analysis.framework !== "unknown") return STRATEGIES.frameworkSpecific;
+    if (analysis.domStructure?.usesShadowDOM) return STRATEGIES.shadowDom;
+    if (analysis.iframes?.some(f => !f.accessible)) return STRATEGIES.crossOriginIframe;
+    if (analysis.domStructure?.customPlayerElement) return STRATEGIES.customPlayer;
+    return STRATEGIES.genericHtml5;
+  }
+
+  function buildAdapter(analysis, strategy) { return strategy.template(analysis); }
+
+  function frameworkSpecificDetection(framework) {
+    switch (framework) {
+      case "youtube": return `\n    const ytPlayer = document.querySelector("ytd-player")?.player;\n    if (ytPlayer?.getVideoUrl) {\n      const video = document.querySelector("video.html5-main-video") || document.querySelector("video[src*='googlevideo']");\n      if (video) return video;\n    }\n    const videos = Array.from(document.querySelectorAll("video"));\n    return videos.find(v => { const r = v.getBoundingClientRect(); return r.width > 0 && r.height > 0 && v.readyState >= 1; }) || videos[0] || null;`;
+      case "vimeo": return `\n    const vp = document.querySelector(".vue-player, [data-vimeo-id]");\n    if (vp) { const v = vp.querySelector("video"); if (v) return v; }\n    return document.querySelector("video") || null;`;
+      case "netflix": return `\n    const vids = Array.from(document.querySelectorAll("video"));\n    return vids.find(v => { const r = v.getBoundingClientRect(); return r.width > 100 && r.height > 100; }) || vids[0] || null;`;
+      case "disney_plus": return `\n    const c = document.querySelector(".btm-media-container, [data-testid='btm-media-results']");\n    if (c) { const v = c.querySelector("video"); if (v) return v; }\n    return document.querySelector("video") || null;`;
+      case "prime_video": return `\n    const s = document.querySelector(".webPlayerSDKContainer, [data-testid='tvui-player']");\n    if (s) { const v = s.querySelector("video"); if (v) return v; }\n    return document.querySelector("video") || null;`;
+      default: return `\n    return document.querySelector("video") || null;`;
+    }
+  }
+
+  const STRATEGIES = {
+    genericHtml5: {
+      name: "generic_html5",
+      hooks: ["play","pause","seeked","ratechange","waiting","playing","timeupdate"],
+      template: (a) => `// Duet Adapter — Generic HTML5 Video\n// Generated for: ${a.hostname}\n(function(){\n"use strict";\nconst ID="${a.hostname}_generic_${Date.now()}";\nconst SEL=${JSON.stringify(a.videoSelector||"video")};\nfunction findVideo(){const vs=Array.from(document.querySelectorAll("video"));if(!vs.length)return null;if(SEL&&SEL!=="video"){try{const s=document.querySelector(SEL);if(s&&s.tagName==="VIDEO")return s}catch{}}let b=null,bs=0;for(const v of vs){const r=v.getBoundingClientRect();if(r.width<=0||r.height<=0)continue;if(getComputedStyle(v).visibility==="hidden")continue;const sc=r.width*r.height+(v.readyState>=2?1e6:0);if(sc>bs){b=v;bs=sc;}}return b;}\nfunction attachListeners(v,send){if(v._da)return;v._da=true;const g=f=>()=>{try{f()}catch{}};v.addEventListener("play",g(()=>send("play")));v.addEventListener("pause",g(()=>send("pause")));v.addEventListener("seeked",g(()=>send(v.paused?"pause":"play")));v.addEventListener("ratechange",g(()=>send(v.paused?"pause":"play")));v.addEventListener("waiting",g(()=>{if(!v._dr)send("pause")}));v.addEventListener("playing",g(()=>send("play")));}\nfunction applySync(v,st,sn){if(!v)return;let t=st.currentTime;if(st.action==="play"&&typeof st.serverTime==="number"&&typeof sn==="number")t=st.currentTime+Math.max(0,(sn-st.serverTime)/1000);if(Math.abs(v.currentTime-t)>(st.force?0:1)){try{v.currentTime=t}catch{}}if(st.playbackRate&&Math.abs(v.playbackRate-st.playbackRate)>0.01){try{v.playbackRate=st.playbackRate}catch{}}v._dr=true;if(st.action==="play"&&v.paused)v.play().catch(()=>{});else if(st.action==="pause"&&!v.paused)v.pause();setTimeout(()=>{v._dr=false},500);}\nfunction getMetadata(v){if(!v)return null;return{url:location.href,hostname:location.hostname.replace(/^www\\./,""),pageTitle:document.title,videoTitle:document.querySelector('meta[property="og:title"]')?.content||document.title,duration:isFinite(v.duration)?v.duration:0,currentTime:v.currentTime,paused:v.paused};}\nwindow.__duetAdapter={id:ID,findVideo,attachListeners,applySync,getMetadata};})();`
+    },
+    shadowDom: {
+      name: "shadow_dom",
+      hooks: ["play","pause","seeked","ratechange","waiting","playing","timeupdate","shadow_root"],
+      template: (a) => `// Duet Adapter — Shadow DOM Player\n// Generated for: ${a.hostname}\n(function(){\n"use strict";\nconst ID="${a.hostname}_shadow_${Date.now()}";\nfunction findInShadow(root){if(!root)return null;const d=root.querySelector("video");if(d)return d;const all=root.querySelectorAll("*");for(const el of all){if(el.shadowRoot){const f=findInShadow(el.shadowRoot);if(f)return f;}}return null;}\nfunction findVideo(){return findInShadow(document);}\nfunction attachListeners(v,send){if(v._da)return;v._da=true;const g=f=>()=>{try{f()}catch{}};v.addEventListener("play",g(()=>send("play")));v.addEventListener("pause",g(()=>send("pause")));v.addEventListener("seeked",g(()=>send(v.paused?"pause":"play")));v.addEventListener("ratechange",g(()=>send(v.paused?"pause":"play")));v.addEventListener("waiting",g(()=>{if(!v._dr)send("pause")}));v.addEventListener("playing",g(()=>send("play")));}\nfunction applySync(v,st,sn){if(!v)return;let t=st.currentTime;if(st.action==="play"&&typeof st.serverTime==="number"&&typeof sn==="number")t=st.currentTime+Math.max(0,(sn-st.serverTime)/1000);if(Math.abs(v.currentTime-t)>(st.force?0:1)){try{v.currentTime=t}catch{}}if(st.playbackRate&&Math.abs(v.playbackRate-st.playbackRate)>0.01){try{v.playbackRate=st.playbackRate}catch{}}v._dr=true;if(st.action==="play"&&v.paused)v.play().catch(()=>{});else if(st.action==="pause"&&!v.paused)v.pause();setTimeout(()=>{v._dr=false},500);}\nfunction getMetadata(v){if(!v)return null;return{url:location.href,hostname:location.hostname.replace(/^www\\./,""),pageTitle:document.title,videoTitle:document.title,duration:isFinite(v.duration)?v.duration:0,currentTime:v.currentTime,paused:v.paused};}\nwindow.__duetAdapter={id:ID,findVideo,attachListeners,applySync,getMetadata};})();`
+    },
+    crossOriginIframe: {
+      name: "cross_origin_iframe",
+      hooks: ["play","pause","seeked","ratechange","postmessage"],
+      template: (a) => `// Duet Adapter — Cross-Origin Iframe\n// Generated for: ${a.hostname}\n(function(){\n"use strict";\nconst ID="${a.hostname}_iframe_${Date.now()}";\nconst top=window.top===window.self;\nif(!top){function findVideo(){const vs=Array.from(document.querySelectorAll("video"));let b=null,bs=0;for(const v of vs){const r=v.getBoundingClientRect();if(r.width<=0||r.height<=0)continue;const sc=r.width*r.height+(v.readyState>=2?1e6:0);if(sc>bs){b=v;bs=sc;}}return b;}\nfunction relay(v){if(!v)return;window.parent?.postMessage({__duet_iframe_state:{currentTime:v.currentTime,duration:isFinite(v.duration)?v.duration:0,paused:v.paused,playbackRate:v.playbackRate,readyState:v.readyState}},"*");}\nlet lr=0;function attachListeners(v,send){if(v._da)return;v._da=true;const g=f=>()=>{try{f()}catch{}};v.addEventListener("play",g(()=>{send("play");relay(v)}));v.addEventListener("pause",g(()=>{send("pause");relay(v)}));v.addEventListener("seeked",g(()=>{send(v.paused?"pause":"play");relay(v)}));v.addEventListener("ratechange",g(()=>send(v.paused?"pause":"play")));v.addEventListener("timeupdate",g(()=>{const n=Date.now();if(n-lr>1000){lr=n;relay(v);}}));}\nwindow.addEventListener("message",e=>{if(e.data?.__duet_remote_sync){const{action,currentTime,serverTime}=e.data.__duet_remote_sync;const v=findVideo();if(!v)return;let t=currentTime;if(action==="play"&&typeof serverTime==="number")t=currentTime+Math.max(0,(Date.now()-serverTime)/1000);if(Math.abs(v.currentTime-t)>0.5){try{v.currentTime=t}catch{}}v._dr=true;if(action==="play"&&v.paused)v.play().catch(()=>{});else if(action==="pause"&&!v.paused)v.pause();setTimeout(()=>{v._dr=false},500);}});\nfunction applySync(){}function getMetadata(v){if(!v)return null;return{url:location.href,hostname:location.hostname.replace(/^www\\./,""),pageTitle:document.title,videoTitle:document.title,duration:isFinite(v.duration)?v.duration:0,currentTime:v.currentTime,paused:v.paused};}\nwindow.__duetAdapter={id:ID,findVideo,attachListeners,applySync,getMetadata};}\nif(top){let is=null;window.addEventListener("message",e=>{if(e.data?.__duet_iframe_state)is=e.data.__duet_iframe_state;});window.__duetAdapter={id:ID,findVideo:()=>null,attachListeners:()=>{},applySync:(v,st,sn)=>{document.querySelectorAll("iframe").forEach(f=>{try{f.contentWindow?.postMessage({__duet_remote_sync:{...st,serverTime:sn}},"*")}catch{}});},getMetadata:()=>is?{url:location.href,hostname:location.hostname.replace(/^www\\./,""),pageTitle:document.title,videoTitle:document.title,duration:is.duration||0,currentTime:is.currentTime||0,paused:is.paused}:null};}\n})();`
+    },
+    customPlayer: {
+      name: "custom_player",
+      hooks: ["play","pause","seeked","ratechange","custom_api"],
+      template: (a) => `// Duet Adapter — Custom Player API\n// Generated for: ${a.hostname}\n(function(){\n"use strict";\nconst ID="${a.hostname}_custom_${Date.now()}";\nfunction findVideo(){const pe=document.querySelector("${a.domStructure?.customPlayerElement||"[class*=player]"}");if(pe){if(pe.video)return pe.video;if(pe.player?.video)return pe.player.video;if(pe.getVideo)return pe.getVideo();const inner=pe.querySelector("video");if(inner)return inner;}const vs=Array.from(document.querySelectorAll("video"));let b=null,bs=0;for(const v of vs){const r=v.getBoundingClientRect();if(r.width<=0||r.height<=0)continue;const sc=r.width*r.height+(v.readyState>=2?1e6:0);if(sc>bs){b=v;bs=sc;}}return b;}\nfunction attachListeners(v,send){if(v._da)return;v._da=true;const g=f=>()=>{try{f()}catch{}};v.addEventListener("play",g(()=>send("play")));v.addEventListener("pause",g(()=>send("pause")));v.addEventListener("seeked",g(()=>send(v.paused?"pause":"play")));v.addEventListener("ratechange",g(()=>send(v.paused?"pause":"play")));v.addEventListener("waiting",g(()=>{if(!v._dr)send("pause")}));v.addEventListener("playing",g(()=>send("play")));const pe=document.querySelector("${a.domStructure?.customPlayerElement||"[class*=player]"}");if(pe&&pe.on){try{pe.on("play",g(()=>send("play")));pe.on("pause",g(()=>send("pause")));}catch{}}}\nfunction applySync(v,st,sn){if(!v)return;let t=st.currentTime;if(st.action==="play"&&typeof st.serverTime==="number"&&typeof sn==="number")t=st.currentTime+Math.max(0,(sn-st.serverTime)/1000);if(Math.abs(v.currentTime-t)>(st.force?0:1)){try{v.currentTime=t}catch{}}if(st.playbackRate&&Math.abs(v.playbackRate-st.playbackRate)>0.01){try{v.playbackRate=st.playbackRate}catch{}}v._dr=true;if(st.action==="play"&&v.paused)v.play().catch(()=>{});else if(st.action==="pause"&&!v.paused)v.pause();setTimeout(()=>{v._dr=false},500);}\nfunction getMetadata(v){if(!v)return null;return{url:location.href,hostname:location.hostname.replace(/^www\\./,""),pageTitle:document.title,videoTitle:document.querySelector('meta[property="og:title"]')?.content||document.title,duration:isFinite(v.duration)?v.duration:0,currentTime:v.currentTime,paused:v.paused};}\nwindow.__duetAdapter={id:ID,findVideo,attachListeners,applySync,getMetadata};})();`
+    },
+    frameworkSpecific: {
+      name: "framework_specific",
+      hooks: ["play","pause","seeked","ratechange","framework_api"],
+      template: (a) => `// Duet Adapter — ${a.framework} Player\n// Generated for: ${a.hostname}\n(function(){\n"use strict";\nconst ID="${a.hostname}_${a.framework}_${Date.now()}";\nfunction findVideo(){${frameworkSpecificDetection(a.framework)}}\nfunction attachListeners(v,send){if(v._da)return;v._da=true;const g=f=>()=>{try{f()}catch{}};v.addEventListener("play",g(()=>send("play")));v.addEventListener("pause",g(()=>send("pause")));v.addEventListener("seeked",g(()=>send(v.paused?"pause":"play")));v.addEventListener("ratechange",g(()=>send(v.paused?"pause":"play")));v.addEventListener("waiting",g(()=>{if(!v._dr)send("pause")}));v.addEventListener("playing",g(()=>send("play")));}\nfunction applySync(v,st,sn){if(!v)return;let t=st.currentTime;if(st.action==="play"&&typeof st.serverTime==="number"&&typeof sn==="number")t=st.currentTime+Math.max(0,(sn-st.serverTime)/1000);if(Math.abs(v.currentTime-t)>(st.force?0:1)){try{v.currentTime=t}catch{}}if(st.playbackRate&&Math.abs(v.playbackRate-st.playbackRate)>0.01){try{v.playbackRate=st.playbackRate}catch{}}v._dr=true;if(st.action==="play"&&v.paused)v.play().catch(()=>{});else if(st.action==="pause"&&!v.paused)v.pause();setTimeout(()=>{v._dr=false},500);}\nfunction getMetadata(v){if(!v)return null;return{url:location.href,hostname:location.hostname.replace(/^www\\./,""),pageTitle:document.title,videoTitle:document.querySelector('meta[property="og:title"]')?.content||document.title,duration:isFinite(v.duration)?v.duration:0,currentTime:v.currentTime,paused:v.paused};}\nwindow.__duetAdapter={id:ID,findVideo,attachListeners,applySync,getMetadata};})();`
+    }
+  };
+  return { generate, STRATEGIES };
+})();
+if (typeof module !== "undefined") module.exports = AdapterGenerator;
+  </script>
+
+  <!-- INLINED: extension/agent/sandbox-tester.js (inlined for file:// compatibility) -->
+  <script>
+const SandboxTester = (() => {
+  "use strict";
+  function validate(code) {
+    const errors = [], warnings = [];
+    try { new Function(code); } catch (err) { errors.push(`Syntax: ${err.message}`); return { ok: false, errors, warnings }; }
+    for (const fn of ["findVideo","attachListeners","applySync","getMetadata"]) {
+      if (!code.includes(fn)) errors.push(`Missing required function: ${fn}`);
+    }
+    if (!code.includes("__duetAdapter")) errors.push("Adapter does not expose window.__duetAdapter");
+    if (code.includes("eval(") && !code.includes("__duet_sandbox")) warnings.push("Adapter uses eval() — may be blocked by CSP");
+    if (code.includes("innerHTML") && code.includes("user")) warnings.push("Adapter uses innerHTML with user data — potential XSS risk");
+    if (code.includes("document.write")) warnings.push("Adapter uses document.write — may break page");
+    return { ok: errors.length === 0, errors, warnings };
+  }
+  function validateSyntax(code) { try { new Function(code); return { ok: true }; } catch (err) { return { ok: false, error: err.message }; } }
+  return { validate, validateSyntax };
+})();
+if (typeof module !== "undefined") module.exports = SandboxTester;
+  </script>
+
+  <!-- Test panel logic -->
+  <script>
     const TEST_SITES = [
-      {
-        id: 1,
-        name: "YouTube",
-        url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        hostname: "youtube.com",
-        difficulty: "easy",
-        expectedFramework: "youtube",
-        expectedStrategy: "framework_specific",
-        notes: "HTML5 player, well-structured DOM, shadow DOM for player controls"
-      },
-      {
-        id: 2,
-        name: "Vimeo",
-        url: "https://vimeo.com/148751763",
-        hostname: "vimeo.com",
-        difficulty: "easy",
-        expectedFramework: "vimeo",
-        expectedStrategy: "framework_specific",
-        notes: "Clean HTML5 player, standard video events"
-      },
-      {
-        id: 3,
-        name: "HTML5 Test Page",
-        url: "https://example.com",
-        hostname: "example.com",
-        difficulty: "easy",
-        expectedFramework: "none",
-        expectedStrategy: "generic_html5",
-        notes: "No video — tests agent's handling of missing video gracefully"
-      },
-      {
-        id: 4,
-        name: "Netflix",
-        url: "https://www.netflix.com",
-        hostname: "netflix.com",
-        difficulty: "hard",
-        expectedFramework: "netflix",
-        expectedStrategy: "framework_specific",
-        notes: "DRM (Widevine/FairPlay), fights extensions, EME blocks direct control"
-      },
-      {
-        id: 5,
-        name: "Disney+",
-        url: "https://www.disneyplus.com",
-        hostname: "disneyplus.com",
-        difficulty: "hard",
-        expectedFramework: "disney_plus",
-        expectedStrategy: "framework_specific",
-        notes: "DRM (Widevine), custom player, aggressive anti-extension"
-      },
-      {
-        id: 6,
-        name: "Prime Video",
-        url: "https://www.primevideo.com",
-        hostname: "primevideo.com",
-        difficulty: "hard",
-        expectedFramework: "prime_video",
-        expectedStrategy: "framework_specific",
-        notes: "DRM (Widevine), web player SDK, fights extensions"
-      },
-      {
-        id: 7,
-        name: "Twitch",
-        url: "https://www.twitch.tv",
-        hostname: "twitch.tv",
-        difficulty: "medium",
-        expectedFramework: "twitch",
-        expectedStrategy: "custom_player",
-        notes: "Custom player, HLS.js, may have shadow DOM components"
-      },
-      {
-        id: 8,
-        name: "Dailymotion",
-        url: "https://www.dailymotion.com",
-        hostname: "dailymotion.com",
-        difficulty: "medium",
-        expectedFramework: "dailymotion",
-        expectedStrategy: "generic_html5",
-        notes: "Standard HTML5 player, may have ad overlays"
-      },
-      {
-        id: 9,
-        name: "Archive.org",
-        url: "https://archive.org",
-        hostname: "archive.org",
-        difficulty: "easy",
-        expectedFramework: "none",
-        expectedStrategy: "generic_html5",
-        notes: "Standard HTML5 video, no DRM, clean DOM"
-      },
-      {
-        id: 10,
-        name: "Custom Player Site",
-        url: "https://example.com/custom-player",
-        hostname: "example.com",
-        difficulty: "medium",
-        expectedFramework: "none",
-        expectedStrategy: "shadow_dom",
-        notes: "Simulates a site with shadow DOM video — tests agent's shadow traversal"
-      }
+      { id:1, name:"YouTube", url:"https://www.youtube.com/watch?v=dQw4w9WgXcQ", hostname:"youtube.com", difficulty:"easy", expectedFramework:"youtube", expectedStrategy:"framework_specific", notes:"HTML5 player, well-structured DOM, shadow DOM for player controls" },
+      { id:2, name:"Vimeo", url:"https://vimeo.com/148751763", hostname:"vimeo.com", difficulty:"easy", expectedFramework:"vimeo", expectedStrategy:"framework_specific", notes:"Clean HTML5 player, standard video events" },
+      { id:3, name:"HTML5 Test Page", url:"https://example.com", hostname:"example.com", difficulty:"easy", expectedFramework:"none", expectedStrategy:"generic_html5", notes:"No video — tests agent's handling of missing video gracefully" },
+      { id:4, name:"Netflix", url:"https://www.netflix.com", hostname:"netflix.com", difficulty:"hard", expectedFramework:"netflix", expectedStrategy:"framework_specific", notes:"DRM (Widevine/FairPlay), fights extensions, EME blocks direct control" },
+      { id:5, name:"Disney+", url:"https://www.disneyplus.com", hostname:"disneyplus.com", difficulty:"hard", expectedFramework:"disney_plus", expectedStrategy:"framework_specific", notes:"DRM (Widevine), custom player, aggressive anti-extension" },
+      { id:6, name:"Prime Video", url:"https://www.primevideo.com", hostname:"primevideo.com", difficulty:"hard", expectedFramework:"prime_video", expectedStrategy:"framework_specific", notes:"DRM (Widevine), web player SDK, fights extensions" },
+      { id:7, name:"Twitch", url:"https://www.twitch.tv", hostname:"twitch.tv", difficulty:"medium", expectedFramework:"twitch", expectedStrategy:"custom_player", notes:"Custom player, HLS.js, may have shadow DOM components" },
+      { id:8, name:"Dailymotion", url:"https://www.dailymotion.com", hostname:"dailymotion.com", difficulty:"medium", expectedFramework:"dailymotion", expectedStrategy:"generic_html5", notes:"Standard HTML5 player, may have ad overlays" },
+      { id:9, name:"Archive.org", url:"https://archive.org", hostname:"archive.org", difficulty:"easy", expectedFramework:"none", expectedStrategy:"generic_html5", notes:"Standard HTML5 video, no DRM, clean DOM" },
+      { id:10, name:"Custom Player Site", url:"https://example.com/custom-player", hostname:"example.com", difficulty:"medium", expectedFramework:"none", expectedStrategy:"shadow_dom", notes:"Simulates a site with shadow DOM video — tests agent's shadow traversal" }
     ];
 
-    // ── State ─────────────────────────────────────────────────
     let results = [];
     let running = false;
 
-    // ── Render ────────────────────────────────────────────────
     function renderResults() {
       const tbody = document.getElementById("test-results");
-      tbody.innerHTML = results.map((r, i) => `
+      tbody.innerHTML = results.map(r => `
         <tr>
           <td>${r.id}</td>
           <td class="site-name">${r.name}</td>
@@ -378,25 +279,19 @@
           <td class="notes">${r.notes || ''}</td>
         </tr>
       `).join("");
-
-      // Update stats
       const detected = results.filter(r => r.detected === true).length;
       const generated = results.filter(r => r.adapterGenerated === true).length;
       const passed = results.filter(r => r.sandboxPass === true).length;
       const confidences = results.filter(r => r.confidence != null).map(r => r.confidence);
       const avgConf = confidences.length ? Math.round(confidences.reduce((a, b) => a + b, 0) / confidences.length) : null;
-
       document.getElementById("stat-detected").textContent = detected + "/" + results.length;
       document.getElementById("stat-generated").textContent = generated + "/" + results.length;
       document.getElementById("stat-passed").textContent = passed + "/" + results.length;
       document.getElementById("stat-confidence").textContent = avgConf != null ? avgConf + "%" : "—";
-
-      // Progress
       const progress = results.length ? (results.filter(r => r.completed).length / results.length * 100) : 0;
       document.getElementById("progress").style.width = progress + "%";
     }
 
-    // ── Log ───────────────────────────────────────────────────
     function log(msg, type = "info") {
       const el = document.getElementById("results-log");
       el.style.display = "block";
@@ -407,54 +302,52 @@
       el.scrollTop = el.scrollHeight;
     }
 
-    // ── Test Runner ───────────────────────────────────────────
+    function simulateDetection(site) {
+      if (site.hostname === "example.com" && !site.url.includes("custom-player")) return false;
+      return true;
+    }
+
+    function simulateConfidence(site) {
+      const base = { easy: 75, medium: 55, hard: 30 };
+      return Math.min(100, Math.max(0, (base[site.difficulty] || 50) + Math.floor(Math.random() * 10 - 5)));
+    }
+
     async function runAllTests() {
       if (running) return;
       running = true;
       document.getElementById("run-btn").disabled = true;
       results = [];
-
       log("Starting 10-site test panel...", "info");
 
       for (const site of TEST_SITES) {
         const result = { ...site, detected: null, adapterGenerated: null, sandboxPass: null, framework: null, strategy: null, confidence: null, completed: false };
         results.push(result);
         renderResults();
-
         log(`Testing ${site.name} (${site.hostname})...`, "info");
 
         try {
-          // 1. Site Analysis (simulated — can't fetch remote DOM from a local page)
           result.detected = simulateDetection(site);
           result.framework = site.expectedFramework;
           result.confidence = simulateConfidence(site);
           log(`  Detection: ${result.detected ? 'found video' : 'no video'}, framework: ${result.framework}, confidence: ${result.confidence}`, result.detected ? 'success' : 'warn');
 
-          // 2. Adapter Generation
-          if (window.AdapterGenerator && result.detected !== null) {
+          if (window.AdapterGenerator && result.detected) {
             const mockAnalysis = {
-              url: site.url,
-              hostname: site.hostname,
-              hasVideo: result.detected,
-              videoSelector: result.detected ? "video" : null,
-              framework: result.framework || "unknown",
+              url: site.url, hostname: site.hostname, hasVideo: result.detected,
+              videoSelector: "video", framework: result.framework || "unknown",
               domStructure: { usesShadowDOM: result.framework === "youtube" },
               challenges: result.difficulty === "hard" ? [{ type: "drm", severity: "high" }] : [],
-              iframes: [],
-              confidence: result.confidence
+              iframes: [], confidence: result.confidence
             };
             const adapter = AdapterGenerator.generate(mockAnalysis);
             result.adapterGenerated = true;
             result.strategy = adapter.strategy;
             log(`  Adapter generated: strategy=${adapter.strategy}, hooks=${adapter.hooks.length}`, "success");
 
-            // 3. Validation
             if (window.SandboxTester) {
               const validation = SandboxTester.validate(adapter.code);
               result.sandboxPass = validation.ok;
-              if (validation.warnings.length) {
-                log(`  Warnings: ${validation.warnings.join('; ')}`, "warn");
-              }
+              if (validation.warnings.length) log(`  Warnings: ${validation.warnings.join('; ')}`, "warn");
               log(`  Validation: ${validation.ok ? 'PASS' : 'FAIL'} (${validation.errors.length} errors, ${validation.warnings.length} warnings)`, validation.ok ? 'success' : 'error');
             }
           } else {
@@ -463,15 +356,12 @@
           }
         } catch (err) {
           log(`  Error: ${err.message}`, "error");
-          result.detected = result.detected ?? false;
           result.adapterGenerated = false;
           result.sandboxPass = false;
         }
 
         result.completed = true;
         renderResults();
-
-        // Brief delay between sites to avoid hammering
         await new Promise(r => setTimeout(r, 200));
       }
 
@@ -481,94 +371,27 @@
     }
 
     async function runQuickSyntax() {
-      results = TEST_SITES.map(site => ({
-        ...site,
-        detected: null,
-        adapterGenerated: null,
-        sandboxPass: null,
-        framework: null,
-        strategy: null,
-        confidence: null,
-        completed: false
-      }));
+      results = TEST_SITES.map(site => ({ ...site, detected: null, adapterGenerated: null, sandboxPass: null, framework: null, strategy: null, confidence: null, completed: false }));
       renderResults();
-
       log("Running quick syntax validation...", "info");
-
       for (const site of results) {
-        const mockAnalysis = {
-          url: site.url,
-          hostname: site.hostname,
-          hasVideo: true,
-          videoSelector: "video",
-          framework: site.expectedFramework || "unknown",
-          domStructure: { usesShadowDOM: false },
-          challenges: [],
-          iframes: [],
-          confidence: 50
-        };
-
+        const mockAnalysis = { url: site.url, hostname: site.hostname, hasVideo: true, videoSelector: "video", framework: site.expectedFramework || "unknown", domStructure: { usesShadowDOM: false }, challenges: [], iframes: [], confidence: 50 };
         try {
           if (window.AdapterGenerator) {
             const adapter = AdapterGenerator.generate(mockAnalysis);
-            site.adapterGenerated = true;
-            site.strategy = adapter.strategy;
-            site.framework = site.expectedFramework;
-            site.confidence = mockAnalysis.confidence;
-
-            if (window.SandboxTester) {
-              const validation = SandboxTester.validate(adapter.code);
-              site.sandboxPass = validation.ok;
-            }
+            site.adapterGenerated = true; site.strategy = adapter.strategy; site.framework = site.expectedFramework; site.confidence = mockAnalysis.confidence;
+            if (window.SandboxTester) { const v = SandboxTester.validate(adapter.code); site.sandboxPass = v.ok; }
           }
-        } catch (err) {
-          site.sandboxPass = false;
-          log(`  ${site.name}: ${err.message}`, "error");
-        }
-
+        } catch (err) { site.sandboxPass = false; log(`  ${site.name}: ${err.message}`, "error"); }
         site.completed = true;
         renderResults();
       }
-
       log("Syntax validation complete.", "success");
     }
 
-    // ── Simulations (for test panel without real DOM) ─────────
-    function simulateDetection(site) {
-      // Sites with video return true, example.com returns false
-      if (site.hostname === "example.com" && !site.url.includes("custom-player")) return false;
-      return true;
-    }
-
-    function simulateConfidence(site) {
-      const base = {
-        easy: 75,
-        medium: 55,
-        hard: 30
-      };
-      const conf = base[site.difficulty] || 50;
-      // Add some variance
-      return Math.min(100, Math.max(0, conf + Math.floor(Math.random() * 10 - 5)));
-    }
-
-    // ── Export ────────────────────────────────────────────────
     function exportResults() {
-      const data = results.map(r => ({
-        site: r.name,
-        hostname: r.hostname,
-        difficulty: r.difficulty,
-        detected: r.detected,
-        framework: r.framework,
-        adapterGenerated: r.adapterGenerated,
-        strategy: r.strategy,
-        confidence: r.confidence,
-        sandboxPass: r.sandboxPass,
-        notes: r.notes
-      }));
-      const json = JSON.stringify(data, null, 2);
-      navigator.clipboard.writeText(json).then(() => {
-        log("Results copied to clipboard", "success");
-      });
+      const data = results.map(r => ({ site: r.name, hostname: r.hostname, difficulty: r.difficulty, detected: r.detected, framework: r.framework, adapterGenerated: r.adapterGenerated, strategy: r.strategy, confidence: r.confidence, sandboxPass: r.sandboxPass, notes: r.notes }));
+      navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(() => log("Results copied to clipboard", "success"));
     }
 
     function clearResults() {
@@ -578,7 +401,6 @@
       document.getElementById("results-log").style.display = "none";
     }
 
-    // ── Init ──────────────────────────────────────────────────
     renderResults();
   </script>
 </body>
