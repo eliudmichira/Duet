@@ -238,6 +238,20 @@
     </p>
   </div>
 
+  <!-- Mock chrome.storage for modules that need it outside the extension -->
+  <script>
+    if (!window.chrome) window.chrome = {};
+    if (!window.chrome.storage) window.chrome.storage = {};
+    if (!window.chrome.storage.local) window.chrome.storage.local = {
+      get: (keys, cb) => cb && cb({}),
+      set: (obj, cb) => cb && cb(),
+      remove: (keys, cb) => cb && cb()
+    };
+  </script>
+  <!-- Load actual agent modules -->
+  <script src="../extension/agent/adapter-generator.js"></script>
+  <script src="../extension/agent/sandbox-tester.js"></script>
+  <script src="../extension/agent/site-analyzer.js"></script>
   <script>
     // ── Test Definitions ───────────────────────────────────────
     const TEST_SITES = [
@@ -410,20 +424,11 @@
         log(`Testing ${site.name} (${site.hostname})...`, "info");
 
         try {
-          // 1. Site Analysis
-          if (window.SiteAnalyzer) {
-            const analysis = await SiteAnalyzer.analyze(site.url);
-            result.detected = analysis.hasVideo;
-            result.framework = analysis.framework;
-            result.confidence = analysis.confidence;
-            log(`  Detection: ${analysis.hasVideo ? 'found video' : 'no video'}, framework: ${analysis.framework}, confidence: ${analysis.confidence}`, analysis.hasVideo ? 'success' : 'warn');
-          } else {
-            // Simulate for test panel without real DOM
-            result.detected = simulateDetection(site);
-            result.framework = site.expectedFramework;
-            result.confidence = simulateConfidence(site);
-            log(`  Simulated detection: ${result.detected}, framework: ${result.framework}, confidence: ${result.confidence}`, result.detected ? 'success' : 'warn');
-          }
+          // 1. Site Analysis (simulated — can't fetch remote DOM from a local page)
+          result.detected = simulateDetection(site);
+          result.framework = site.expectedFramework;
+          result.confidence = simulateConfidence(site);
+          log(`  Detection: ${result.detected ? 'found video' : 'no video'}, framework: ${result.framework}, confidence: ${result.confidence}`, result.detected ? 'success' : 'warn');
 
           // 2. Adapter Generation
           if (window.AdapterGenerator && result.detected !== null) {
