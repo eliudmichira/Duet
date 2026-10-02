@@ -213,6 +213,12 @@ Same tokens, scoped to a shadow root so the host page can't restyle it.
 | `.flash`, `.toast`            | Lifted       | Accent-tinted cast: play green, pause peach, leave red |
 | `.icon-key` (minimize)        | Flat → lifts on hover | Small object, -1px travel                  |
 
+## The signature moment
+
+When the partner plays or pauses, the flash shows the **duet mark**: the logo's two halves clicking together. Pause = two bars slide in from either side; play = the triangle's top and bottom halves meet. Halves use the brand gradient (peach→coral, rose→violet), then a small "click" (scale 1→1.18→1) and a rose ring pulse. Timing: ~0.42s slide with a slight overshoot, click and ring start at ~0.3s. Reduced motion: the mark appears without movement.
+
+Only partner-driven play/pause gets it. Status and error flashes keep the plain icon, so the moment stays special.
+
 ## Hierarchy rule of thumb
 
 > The number of elements that look "raised" on screen at once should equal the number of distinct actions the user is being offered.

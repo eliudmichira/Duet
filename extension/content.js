@@ -1018,6 +1018,36 @@
       box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
     }
 
+    /* The duet mark — the logo's two halves clicking together. Plays when
+       the partner plays/pauses: pause = two bars slide in from either side,
+       play = the triangle's top and bottom halves meet; then a small
+       "click" and a ring pulse. */
+    .flash-icon.mark {
+      position: relative; overflow: visible;
+      width: 28px; height: 28px;
+      background: radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08), rgba(0,0,0,0.35));
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10), 0 0 14px rgba(244,114,182,0.25);
+    }
+    .mark svg { width: 18px; height: 18px; overflow: visible; animation: duet-click .46s ease .3s both; }
+    .mark .half { transform-box: fill-box; animation: .42s cubic-bezier(.3,1.45,.5,1) both; }
+    .mark[data-shape="pause"] .a { animation-name: duet-from-left; }
+    .mark[data-shape="pause"] .b { animation-name: duet-from-right; }
+    .mark[data-shape="play"]  .a { animation-name: duet-from-top; }
+    .mark[data-shape="play"]  .b { animation-name: duet-from-bottom; }
+    .mark::after {
+      content: ""; position: absolute; inset: -1px; border-radius: 50%;
+      box-shadow: 0 0 0 2px var(--rose);
+      opacity: 0; pointer-events: none;
+      animation: duet-ring-out .65s ease-out .32s both;
+    }
+    @keyframes duet-from-left   { from { transform: translateX(-7px); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes duet-from-right  { from { transform: translateX(7px);  opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes duet-from-top    { from { transform: translateY(-6px); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes duet-from-bottom { from { transform: translateY(6px);  opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes duet-click { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.18); } }
+    /* Hidden until the halves meet (the delay holds the 0% frame). */
+    @keyframes duet-ring-out { 0% { opacity: 0; transform: scale(.85); } 8% { opacity: .9; } 100% { opacity: 0; transform: scale(1.7); } }
+
     /* Toasts: Lifted pills centered at the top. */
     .toast {
       --accent: var(--success);
@@ -1106,6 +1136,7 @@
         transition-duration: 0.05s !important;
       }
       .av.typing { animation: none; }
+      .mark svg, .mark .half, .mark::after { animation: none !important; }
     }
   `;
 
@@ -1702,16 +1733,40 @@
       : '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="2.5" y="1.5" width="2.5" height="9" rx="0.7" fill="currentColor"/><rect x="7" y="1.5" width="2.5" height="9" rx="0.7" fill="currentColor"/></svg>';
     const who = S.partnerName || "Partner";
     const label = customLabel || (isPlay ? `${who} played` : `${who} paused`);
-    // Lead with partner's avatar (illustrated portrait or emoji fallback) so
-    // the flash visually maps to who triggered it.
-    const icon = el("span", "flash-icon");
-    icon.innerHTML = avatarHtml(S.partnerEmoji, 24) || glyph;
+    let icon;
+    if (!customLabel) {
+      // Partner played/paused: the signature moment.
+      icon = duetMark(isPlay ? "play" : "pause");
+    } else {
+      // Status/error flashes lead with the partner's avatar (or a glyph).
+      icon = el("span", "flash-icon");
+      icon.innerHTML = avatarHtml(S.partnerEmoji, 24) || glyph;
+    }
     const text = el("span");
     text.innerHTML = twemojiHtml(label);
     flash.replaceChildren(icon, text);
     flash.classList.add("is-visible");
     clearTimeout(flash.__t);
     flash.__t = setTimeout(() => flash.classList.remove("is-visible"), 2500);
+  }
+
+  // Two halves in the brand gradient (peach→coral, rose→violet). Elements are
+  // rebuilt per flash, so the CSS animations replay every time.
+  let markSeq = 0;
+  function duetMark(shape) {
+    const id = `duet-g${++markSeq}`;
+    const halves = shape === "play"
+      ? `<path class="half a" d="M7 4.5 L19.5 12 L7 12 Z" fill="url(#${id}a)"/>` +
+        `<path class="half b" d="M7 12 L19.5 12 L7 19.5 Z" fill="url(#${id}b)"/>`
+      : `<rect class="half a" x="5.5" y="4.5" width="4.6" height="15" rx="1.6" fill="url(#${id}a)"/>` +
+        `<rect class="half b" x="13.9" y="4.5" width="4.6" height="15" rx="1.6" fill="url(#${id}b)"/>`;
+    const span = el("span", "flash-icon mark", { "data-shape": shape, "aria-hidden": "true" });
+    span.innerHTML =
+      `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><defs>` +
+      `<linearGradient id="${id}a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc89a"/><stop offset="1" stop-color="#ff8a6b"/></linearGradient>` +
+      `<linearGradient id="${id}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f472b6"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>` +
+      `</defs>${halves}</svg>`;
+    return span;
   }
 
   // ── Floating reactions & Chat ──────────────────────────────
