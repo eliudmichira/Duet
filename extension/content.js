@@ -1084,8 +1084,14 @@
       position: fixed; max-width: 70vw; pointer-events: none;
       will-change: transform;
     }
-    .bubble.ltr { left: -100%; animation-name: duet-slide-ltr; }
-    .bubble.rtl { right: -100%; animation-name: duet-slide-rtl; }
+    /* Anchored at left:0 and moved purely by transform, so a message enters
+       the instant it's sent (right edge for partner, left edge for you) and
+       travels exactly far enough to leave — translateX(%) is the bubble's
+       own width. (Positioning it a full viewport off-screen, as before, hid
+       every message for its first ~3s.) */
+    .bubble { left: 0; }
+    .bubble.ltr { animation-name: duet-slide-ltr; }
+    .bubble.rtl { animation-name: duet-slide-rtl; }
     .bubble { animation-timing-function: linear; animation-fill-mode: forwards; }
     .bubble-inner {
       display: inline-flex; align-items: baseline; gap: 0.6em;
@@ -1116,21 +1122,23 @@
       30%  {             transform: translateY(-30px) scale(1)   rotate(-2deg); }
       100% { opacity: 0; transform: translateY(-220px) scale(0.9) rotate(6deg); }
     }
-    @keyframes duet-slide-rtl { from { transform: translateX(0); } to { transform: translateX(-180vw); } }
-    @keyframes duet-slide-ltr { from { transform: translateX(0); } to { transform: translateX(180vw); } }
+    @keyframes duet-slide-rtl { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
+    @keyframes duet-slide-ltr { from { transform: translateX(-100%); } to { transform: translateX(100vw); } }
 
     @media (prefers-reduced-motion: reduce) {
       @keyframes duet-float {
         0% { opacity: 0; transform: none; } 15% { opacity: 1; transform: none; }
         85% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; }
       }
+      /* No travel: fade in and out, centred in the lane. */
+      .bubble { left: 50%; }
       @keyframes duet-slide-rtl {
-        0% { opacity: 0; transform: none; } 8% { opacity: 1; transform: none; }
-        92% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; }
+        0% { opacity: 0; transform: translateX(-50%); } 8% { opacity: 1; transform: translateX(-50%); }
+        92% { opacity: 1; transform: translateX(-50%); } 100% { opacity: 0; transform: translateX(-50%); }
       }
       @keyframes duet-slide-ltr {
-        0% { opacity: 0; transform: none; } 8% { opacity: 1; transform: none; }
-        92% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; }
+        0% { opacity: 0; transform: translateX(-50%); } 8% { opacity: 1; transform: translateX(-50%); }
+        92% { opacity: 1; transform: translateX(-50%); } 100% { opacity: 0; transform: translateX(-50%); }
       }
       .badge, .flash, .toast, .puck, .key, .btn-primary, .icon-key {
         transition-duration: 0.05s !important;
