@@ -200,8 +200,7 @@ async function createRoom() {
   }
 
   await presenceRef.set({ joined: firebase.database.ServerValue.TIMESTAMP });
-  presenceRef.onDisconnect().remove();
-  metaRef.onDisconnect().remove();
+  armDisconnectCleanup();
 
   currentRoom = roomCode;
   attachListeners(roomCode);
@@ -254,8 +253,7 @@ async function joinRoom(roomCode) {
     }
     return { error: "Couldn't register your presence — network issue. Try again." };
   }
-  presenceRef.onDisconnect().remove();
-  metaRef.onDisconnect().remove();
+  armDisconnectCleanup();
 
   currentRoom = roomCode;
   attachListeners(roomCode);
@@ -272,13 +270,28 @@ function setRoomRefs(roomCode) {
   reactionsRef = db.ref(`rooms/${roomCode}/reactions`);
 }
 
+// Per-user nodes the server should drop if this client vanishes without
+// calling leaveRoom (SW killed, browser closed, network lost).
+function myEphemeralRefs() {
+  return [
+    presenceRef,
+    metaRef,
+    roomRef.child(`typing/${myUserId}`),
+    roomRef.child(`ping/${myUserId}`)
+  ];
+}
+function armDisconnectCleanup() {
+  for (const ref of myEphemeralRefs()) ref.onDisconnect().remove();
+}
+
 async function leaveRoom() {
   // Capture refs before we null them so the empty-room cleanup below can use them.
   const leavingRoom = currentRoom;
   const leavingRoomRef = roomRef;
 
-  try { if (presenceRef) await presenceRef.remove(); } catch {}
-  try { if (metaRef)     await metaRef.remove();     } catch {}
+  if (roomRef && myUserId) {
+    await Promise.all(myEphemeralRefs().map(ref => ref.remove().catch(() => {})));
+  }
 
   // If we were the last peer, clean up the whole room so abandoned rooms
   // don't accumulate in the DB. We re-check presence after our own removal:
@@ -1086,8 +1099,7 @@ async function bootstrapInner() {
   myUserId = stored.myUserId;
   setRoomRefs(currentRoom);
   await presenceRef.set({ joined: firebase.database.ServerValue.TIMESTAMP });
-  presenceRef.onDisconnect().remove();
-  metaRef.onDisconnect().remove();
+  armDisconnectCleanup();
   attachListeners(currentRoom);
   validateRules().catch(() => {});
   dlog(`[Duet] Restored session: room ${currentRoom}`);
