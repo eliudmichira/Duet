@@ -26,3 +26,9 @@ _[Checkpoint: 69f10d1f — edited extension\popup.js; edited extension\popup.js;
 ---
 
 [01:15:38] THINK: Reverting 7b126ff UI strip to restore Duet visual branding, gradients, logo ring, and avatar animations. Added Screenshot*.png to .gitignore.
+
+
+---
+_[Checkpoint: 6abf060a — Restored custom Duet UI design and visual polish, validated all scripts and manifest]_
+---
+
