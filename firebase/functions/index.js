@@ -3,17 +3,17 @@
 // ============================================================
 //
 // Deletes rooms and presence records that haven't been touched in 7 days.
-// Keeps storage bounded so the Spark free tier doesn't fill up over time
-// and so abandoned rooms can't accumulate forever.
+// Keeps storage bounded so abandoned rooms can't accumulate forever.
 //
-// Deploy:
+// Deploy (rules first — the query below needs the `.indexOn: lastTouch`
+// index they define, or the server refuses to filter and the Admin SDK
+// would download the entire `rooms` tree instead):
 //   cd firebase
-//   firebase deploy --only functions
+//   firebase deploy --only database,functions
 //
-// Costs:
-//   The Spark free tier covers 125k invocations/month and 40k GB-seconds.
-//   This function runs once a day and touches at most a few thousand nodes
-//   per run — well under either cap.
+// Billing: scheduled functions require the Blaze (pay-as-you-go) plan, since
+// they run on Cloud Scheduler. One run a day stays well inside Blaze's free
+// allowances, so expected cost is $0 — but the project must be on Blaze.
 
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
@@ -21,39 +21,50 @@ const admin = require("firebase-admin");
 admin.initializeApp();
 
 const MAX_IDLE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const BATCH = 500;                            // rooms fetched per query
+const MAX_BATCHES = 40;                       // ≤ 20k rooms per run
+
+// Same fallback chain clients use: rooms created by older clients may lack
+// `lastTouch` until their first sync event.
+function lastActivity(room) {
+  return room.lastTouch || room.state?.serverTime || room.created || 0;
+}
 
 exports.cleanupIdleRooms = functions.pubsub
   .schedule("every 24 hours")
   .timeZone("Etc/UTC")
   .onRun(async () => {
-    const now = Date.now();
     const db = admin.database();
-
-    // Fetch the room index, but only the timestamp fields. Loading the whole
-    // tree would be wasteful; "lastTouch" and "state/serverTime" tell us what
-    // we need to decide.
-    const roomsSnap = await db.ref("rooms").once("value");
+    const cutoff = Date.now() - MAX_IDLE_MS;
     let scanned = 0;
     let deleted = 0;
 
-    const deletions = [];
-    roomsSnap.forEach((roomSnap) => {
-      scanned++;
-      const roomId = roomSnap.key;
-      const lastTouch = roomSnap.child("lastTouch").val()
-        || roomSnap.child("state/serverTime").val()
-        || roomSnap.child("created").val()
-        || 0;
-      if (now - lastTouch > MAX_IDLE_MS) {
-        deletions.push(
-          db.ref(`rooms/${roomId}`).remove(),
-          db.ref(`presence/${roomId}`).remove()
-        );
-        deleted++;
-      }
-    });
+    // Only rooms whose lastTouch is old — or missing, since nulls sort first —
+    // are read; active rooms are never downloaded. Page with a (lastTouch,
+    // key) cursor so rooms that are skipped (no lastTouch yet, but recent
+    // `created`) aren't re-read forever.
+    let cursor = null;
+    for (let i = 0; i < MAX_BATCHES; i++) {
+      let query = db.ref("rooms").orderByChild("lastTouch");
+      if (cursor) query = query.startAfter(cursor.value, cursor.key);
+      const snap = await query.endAt(cutoff).limitToFirst(BATCH).once("value");
 
-    await Promise.all(deletions);
-    functions.logger.info(`Duet cleanup: scanned ${scanned} rooms, deleted ${deleted}.`);
+      const updates = {};
+      let count = 0;
+      snap.forEach((roomSnap) => {
+        count++;
+        cursor = { value: roomSnap.child("lastTouch").val(), key: roomSnap.key };
+        if (lastActivity(roomSnap.val() || {}) < cutoff) {
+          updates[`rooms/${roomSnap.key}`] = null;
+          updates[`presence/${roomSnap.key}`] = null;
+          deleted++;
+        }
+      });
+      scanned += count;
+      if (Object.keys(updates).length) await db.ref().update(updates);
+      if (count < BATCH) break;
+    }
+
+    functions.logger.info(`Duet cleanup: scanned ${scanned} idle-candidate rooms, deleted ${deleted}.`);
     return null;
   });

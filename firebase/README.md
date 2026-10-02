@@ -20,7 +20,9 @@ firebase deploy --only database,functions --project pausepal-a4d71
   - Numeric ranges on `currentTime`/`duration` (rejects garbage seek targets).
   - `$other: false` on every schema branch (rejects unknown fields).
 - `functions/index.js` — Scheduled function. Runs daily, deletes rooms idle
-  for 7+ days plus their corresponding presence records.
+  for 7+ days plus their corresponding presence records. It queries
+  `rooms` by `lastTouch`, so it depends on the `.indexOn` in the rules —
+  deploy rules before (or with) functions.
 - `firebase.json` — Project config glue.
 
 ## Operational notes
@@ -30,7 +32,11 @@ firebase deploy --only database,functions --project pausepal-a4d71
 - API key restriction: Cloud Console → APIs & Services → Credentials →
   restrict to `chrome-extension://<extension-id>/*` once the extension has
   a stable Web Store ID.
-- Spark tier limits: 100 concurrent connections (~50 active pairs globally),
-  10 GB/month egress, 1 GB stored. Cleanup function keeps storage bounded.
-- If usage spikes: upgrade to Blaze, tighten the write-floor in
-  `database.rules.json` from 75ms to 250ms, redeploy rules only.
+- Plan: the scheduled cleanup function needs **Blaze** (Cloud Scheduler isn't
+  available on Spark). A daily run fits inside Blaze's free allowances.
+- Connections: the extension only opens a database connection while the
+  browser is in a room, and closes it on leave. So connection count tracks
+  people actively in rooms, not installs. Spark caps RTDB at 100 concurrent
+  connections (~50 pairs); Blaze raises that to 200k per database.
+- Egress: each in-room client publishes its position about once a second
+  and pings every 5s — rough estimate 5–10 MB per pair per hour.

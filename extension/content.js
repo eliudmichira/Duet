@@ -342,7 +342,9 @@
     }
 
     // After threshold, trigger async agent fallback
-    if (noVideoPolls >= AGENT_FALLBACK_THRESHOLD && !agentInitialized) {
+    // Only while in a room: otherwise every video-less page for every user
+    // would wake the background and get the agent injected for nothing.
+    if (S.connected && noVideoPolls >= AGENT_FALLBACK_THRESHOLD && !agentInitialized) {
       tryAgentFallback().then((v) => {
         if (v && v !== video) attachListeners(v);
       });
@@ -366,7 +368,7 @@
     v.addEventListener("seeked",     guard(() => { if (consumeRemoteEvent("seeked"))  return; sendSync(v.paused ? "pause" : "play"); sendTabInfo(true); }));
     v.addEventListener("ratechange", guard(() => { if (consumeRemoteEvent("ratechange")) return; sendSync(v.paused ? "pause" : "play"); sendTabInfo(true); }));
     v.addEventListener("waiting",    guard(() => {
-      if (S.isApplyingRemote) return;
+      if (S.isApplyingRemote || !S.connected) return;
       sendSync("pause");
       // Throttle: only ping the partner once per ~5s so a stuttering stream
       // doesn't spam them.
@@ -1766,12 +1768,20 @@
   });
 
   // ── Initial status fetch ───────────────────────────────────
-  safeSend({ type: "GET_STATUS" }).then((status) => {
-    if (status?.currentRoom) {
-      setState({ connected: true, peerCount: status.peerCount || 1 });
-      if (typeof status.ping === "number") setState({ lastPingMs: status.ping });
-      startTabInfoTimer();
-      sendTabInfo();
-    }
-  });
+  // Check local storage first: when not in a room (the common case) we don't
+  // message the background at all, so ordinary page loads never wake the
+  // service worker. Joining later reaches us via CONNECTION_STATUS.
+  try {
+    chrome.storage.local.get(["currentRoom"], (data) => {
+      if (!data?.currentRoom) return;
+      safeSend({ type: "GET_STATUS" }).then((status) => {
+        if (status?.currentRoom) {
+          setState({ connected: true, peerCount: status.peerCount || 1 });
+          if (typeof status.ping === "number") setState({ lastPingMs: status.ping });
+          startTabInfoTimer();
+          sendTabInfo();
+        }
+      });
+    });
+  } catch {}
 })();

@@ -3,6 +3,7 @@
     "rooms": {
       ".read": false,
       ".write": false,
+      ".indexOn": ["lastTouch"],
 
       "$roomId": {
         ".read":  "$roomId.length === 6",

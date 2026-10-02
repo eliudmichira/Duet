@@ -106,43 +106,29 @@ function explainFirebaseError(op, message) {
 }
 
 // ── Firebase Setup ──────────────────────────────────────────
-// Exponential backoff retry for Firebase connection.
-// Pattern: 1s → 2s → 4s → 8s → 16s (max), then stays at 16s.
-let firebaseRetryAttempt = 0;
-const FIREBASE_MAX_RETRY_MS = 16000;
+// The connection is opened lazily — only while this browser is in a room —
+// and closed with goOffline() on leave. Every install shares one database,
+// and an always-on socket per browser (opened on every page load, since
+// content scripts wake the SW) would exhaust the concurrent-connection cap
+// for users who aren't even watching anything. While online, the SDK
+// reconnects on its own after network drops.
+//
+// Synchronous on purpose: no await between the `db` check and assignment,
+// so concurrent callers can't both run initializeApp().
+function initFirebase() {
+  if (!db) {
+    const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG);
+    db = app.database();
+    db.ref(".info/serverTimeOffset").on("value", (snap) => {
+      serverTimeOffset = snap.val() || 0;
+    });
+  }
+  db.goOnline();
+  return db;
+}
 
-async function initFirebase() {
-  if (db) return true;
-  await Promise.all(firebase.apps.map(app => app.delete()));
-  firebase.initializeApp(FIREBASE_CONFIG);
-  db = firebase.database();
-
-  db.ref(".info/serverTimeOffset").on("value", (snap) => {
-    serverTimeOffset = snap.val() || 0;
-  });
-
-  // Monitor connection state for automatic reconnection
-  db.ref(".info/connected").on("value", (snap) => {
-    if (snap.val() === false) {
-      // Disconnected — schedule retry with backoff
-      firebaseRetryAttempt++;
-      const delay = Math.min(FIREBASE_MAX_RETRY_MS, 1000 * Math.pow(2, firebaseRetryAttempt));
-      dlog(`[Duet] Firebase disconnected, retrying in ${delay}ms (attempt ${firebaseRetryAttempt})`);
-      setTimeout(() => {
-        if (!db) {
-          initFirebase().catch(() => {});
-        }
-      }, delay);
-    } else {
-      // Connected — reset backoff
-      if (firebaseRetryAttempt > 0) {
-        dlog("[Duet] Firebase reconnected");
-        firebaseRetryAttempt = 0;
-      }
-    }
-  });
-
-  return true;
+function disconnectFirebase() {
+  if (db) db.goOffline();
 }
 
 const serverNow = () => Date.now() + serverTimeOffset;
@@ -150,11 +136,12 @@ const serverNow = () => Date.now() + serverTimeOffset;
 // ── Helpers ─────────────────────────────────────────────────
 const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function generateRoomCode() {
-  let code = "";
-  for (let i = 0; i < 6; i++) code += ROOM_ALPHABET[Math.floor(Math.random() * ROOM_ALPHABET.length)];
-  return code;
+  // 256 is a multiple of 32, so `byte % 32` is unbiased.
+  const bytes = crypto.getRandomValues(new Uint8Array(6));
+  return Array.from(bytes, b => ROOM_ALPHABET[b % ROOM_ALPHABET.length]).join("");
 }
-const generateUserId = () => "user_" + Math.random().toString(36).slice(2, 10);
+const generateUserId = () =>
+  "user_" + Array.from(crypto.getRandomValues(new Uint8Array(5)), b => b.toString(16).padStart(2, "0")).join("");
 
 // Reject a promise after `ms` if it hasn't settled. Used to give the popup a
 // real error instead of hanging forever when Firebase is unreachable (offline,
@@ -171,35 +158,50 @@ function withTimeout(promise, ms, label) {
 
 // ── Room Management ─────────────────────────────────────────
 async function createRoom() {
+  initFirebase();
+  // Shared state (myUserId, refs) is only touched once a room is claimed, so a
+  // failed create can't disturb a session that's already running.
+  const newUserId = generateUserId();
+
+  // Claim a fresh code with a transaction so a collision can never overwrite
+  // someone else's live room; on the (rare) clash, draw another code.
+  let roomCode = null;
   try {
-    await withTimeout(initFirebase(), 10000, "Connecting to Firebase");
+    for (let attempt = 0; attempt < 5 && !roomCode; attempt++) {
+      const candidate = generateRoomCode();
+      const res = await withTimeout(db.ref(`rooms/${candidate}`).transaction((cur) => {
+        if (cur !== null) return; // taken — abort
+        return {
+          state: {
+            action: "pause", currentTime: 0, updatedBy: newUserId,
+            serverTime: firebase.database.ServerValue.TIMESTAMP
+          },
+          host: newUserId,
+          created: firebase.database.ServerValue.TIMESTAMP,
+          lastTouch: firebase.database.ServerValue.TIMESTAMP
+        };
+      }, undefined, false), 12000, "Creating room");
+      if (res.committed) roomCode = candidate;
+    }
   } catch (err) {
-    return { error: "Can't reach Duet's sync server. Check your internet or disable ad-blockers for this extension." };
-  }
-
-  const roomCode = generateRoomCode();
-  myUserId = generateUserId();
-
-  setRoomRefs(roomCode);
-
-  try {
-    await withTimeout(roomRef.set({
-      state: {
-        action: "pause", currentTime: 0, updatedBy: myUserId,
-        serverTime: firebase.database.ServerValue.TIMESTAMP
-      },
-      host: myUserId,
-      created: firebase.database.ServerValue.TIMESTAMP
-    }), 12000, "Creating room");
-  } catch (err) {
+    if (!currentRoom) disconnectFirebase();
     const msg = err?.message || String(err);
     if (/PERMISSION_DENIED/i.test(msg)) {
       return { error: "Firebase rules rejected the room creation. Re-paste the rules from the README." };
     }
+    if (/^Timeout/.test(msg)) {
+      return { error: "Can't reach Duet's sync server. Check your internet or disable ad-blockers for this extension." };
+    }
     return { error: "Couldn't create the room — network issue. Try again." };
   }
+  if (!roomCode) {
+    if (!currentRoom) disconnectFirebase();
+    return { error: "Couldn't find a free room code. Try again." };
+  }
+  myUserId = newUserId;
+  setRoomRefs(roomCode);
 
-  await presenceRef.set({ joined: firebase.database.ServerValue.TIMESTAMP });
+  presenceRef.set({ joined: firebase.database.ServerValue.TIMESTAMP }).catch(() => {});
   armDisconnectCleanup();
 
   currentRoom = roomCode;
@@ -211,31 +213,44 @@ async function createRoom() {
 }
 
 async function joinRoom(roomCode) {
-  try {
-    await withTimeout(doBootstrap(), 10000, "Connecting to Firebase");
-  } catch (err) {
-    return { error: "Can't reach Duet's sync server. Check your internet or disable ad-blockers for this extension." };
-  }
-  roomCode = roomCode.toUpperCase().trim();
-  if (!/^[A-Z2-9]{6}$/.test(roomCode)) {
+  roomCode = String(roomCode || "").toUpperCase().trim();
+  if (!/^[A-HJ-NP-Z2-9]{6}$/.test(roomCode)) {
     return { error: "Invalid room code format. Codes are 6 characters, letters + numbers." };
   }
+  // Already in this room (e.g. session restored after a SW restart): keep our
+  // existing identity instead of registering a second presence entry.
+  if (currentRoom === roomCode && myUserId) {
+    return { roomCode, myUserId, joined: true };
+  }
 
-  let snap;
+  initFirebase();
+  let exists, presSnap;
   try {
-    snap = await withTimeout(db.ref(`rooms/${roomCode}`).get(), 12000, "Looking up room");
+    [exists, presSnap] = await Promise.all([
+      roomExists(roomCode, 12000),
+      withTimeout(db.ref(`presence/${roomCode}`).get(), 12000, "Looking up room")
+    ]);
   } catch (err) {
+    if (!currentRoom) disconnectFirebase();
     const msg = err?.message || String(err);
     if (/PERMISSION_DENIED/i.test(msg)) {
       return { error: "Firebase rules are blocking room lookup. Re-paste the rules from the README." };
     }
-    return { error: "Couldn't reach Firebase to check the room. Network issue or Firebase is blocked on this network." };
+    return { error: "Couldn't reach Duet's sync server. Check your internet or disable ad-blockers for this extension." };
   }
-  if (!snap.exists()) return { error: "Room not found. Check the code and try again." };
+  if (!exists) {
+    if (!currentRoom) disconnectFirebase();
+    return { error: "Room not found. Check the code and try again." };
+  }
 
-  // Note: We removed the strict 'memberCount >= 2' rejection here.
-  // If the service worker crashes, Firebase can leave a 'ghost' connection for ~60s.
-  // We want to allow the user to rejoin their own room without being blocked by their own ghost!
+  // Duet is strictly two people. A crashed client's presence can linger until
+  // the server notices the dropped socket (up to ~60s), so say so — a user
+  // re-joining from a fresh install may just need to wait it out.
+  const present = presSnap.exists() ? Object.keys(presSnap.val() || {}).length : 0;
+  if (present >= 2) {
+    if (!currentRoom) disconnectFirebase();
+    return { error: "This room already has two people. If you just left it, wait a minute and try again." };
+  }
 
   myUserId = generateUserId();
   setRoomRefs(roomCode);
@@ -261,6 +276,14 @@ async function joinRoom(roomCode) {
   await chrome.storage.local.set({ currentRoom: roomCode, myUserId });
   validateRules().catch(() => {});
   return { roomCode, myUserId, joined: true };
+}
+
+// Every real room has `created` (set once, at creation). Checking just that
+// leaf avoids downloading the whole room, and isn't fooled by a node that a
+// straggling client's ping/typing write recreated after the room was deleted.
+function roomExists(roomCode, ms) {
+  return withTimeout(db.ref(`rooms/${roomCode}/created`).get(), ms, "Looking up room")
+    .then(snap => snap.exists());
 }
 
 function setRoomRefs(roomCode) {
@@ -289,19 +312,27 @@ async function leaveRoom() {
   const leavingRoom = currentRoom;
   const leavingRoomRef = roomRef;
 
+  // RTDB write promises only settle on a server ack, so offline these would
+  // hang Leave forever. Bound them; the onDisconnect handlers armed on join
+  // remove the same nodes server-side once we go offline below.
+  let reachable = true;
   if (roomRef && myUserId) {
-    await Promise.all(myEphemeralRefs().map(ref => ref.remove().catch(() => {})));
+    await withTimeout(
+      Promise.all(myEphemeralRefs().map(ref => ref.remove().catch(() => {}))),
+      5000, "Leaving room"
+    ).catch(() => { reachable = false; });
   }
 
   // If we were the last peer, clean up the whole room so abandoned rooms
   // don't accumulate in the DB. We re-check presence after our own removal:
-  // if it's empty (or nonexistent), remove `rooms/<code>`.
-  if (leavingRoom && db) {
+  // if it's empty (or nonexistent), remove `rooms/<code>`. Skipped when the
+  // server just proved unreachable — the idle-room cleanup catches it later.
+  if (leavingRoom && db && reachable) {
     try {
-      const presSnap = await db.ref(`presence/${leavingRoom}`).get();
+      const presSnap = await withTimeout(db.ref(`presence/${leavingRoom}`).get(), 5000, "Checking room");
       const remaining = presSnap.exists() ? Object.keys(presSnap.val() || {}).length : 0;
       if (remaining === 0 && leavingRoomRef) {
-        await leavingRoomRef.remove().catch(() => {});
+        await withTimeout(leavingRoomRef.remove(), 5000, "Removing room").catch(() => {});
       }
     } catch {}
   }
@@ -322,6 +353,8 @@ async function leaveRoom() {
   rulesValidated      = false;
   await chrome.storage.local.remove(["currentRoom", "myUserId"]);
   broadcastConnection(false, 0);
+  // Not in a room → no reason to hold a connection to the shared database.
+  disconnectFirebase();
   return { left: true };
 }
 
@@ -621,6 +654,35 @@ async function measurePing() {
 // Measure ping periodically when in a room
 setInterval(() => { if (currentRoom && db) measurePing().catch(() => {}); }, PING_INTERVAL_MS);
 
+// ── Video tab lookup ────────────────────────────────────────
+// Finds the tab to act on for Sync-to-me / Catch-up, and only ever returns a
+// tab that actually reports a <video>: tracked primary tab → active tab → any
+// tab (preferring one that's playing). Adopts the winner as primary, and drops
+// a stale primary along the way so the next click doesn't fail the same way.
+async function locateVideoTab() {
+  const probe = async (tabId) => {
+    if (!tabId) return null;
+    try { await chrome.tabs.get(tabId); } catch { return null; }
+    const hit = await getSnapshotFromAnyFrame(tabId);
+    return hit ? { tabId, hit } : null;
+  };
+
+  let found = await probe(primaryTabId);
+  if (!found) {
+    const [active] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (active?.id !== primaryTabId) found = await probe(active?.id);
+  }
+  if (!found) {
+    const tabs = await chrome.tabs.query({});
+    const hits = (await Promise.all(tabs.map(t => probe(t.id)))).filter(Boolean);
+    found = hits.find(h => !h.hit.r.paused) || hits[0] || null;
+  }
+
+  primaryTabId = found ? found.tabId : null;
+  diag.primaryTabId = primaryTabId;
+  return found;
+}
+
 // ── Catch up to partner ─────────────────────────────────────
 // Seeks our local video to wherever the partner currently is. After the seek
 // we VERIFY by re-reading the local video's currentTime and comparing to
@@ -655,30 +717,11 @@ async function catchUpToPartner() {
     return { error: "You're on a different page. Open partner's page first." };
   }
 
-  // Pick a tab to seek. Same cascade as syncToMe so it just works.
-  const tried = new Set();
-  const tryTab = async (tabId) => {
-    if (!tabId || tried.has(tabId)) return null;
-    tried.add(tabId);
-    try { await chrome.tabs.get(tabId); } catch { return null; }
-    return tabId;
-  };
-  let targetTabId = await tryTab(primaryTabId);
-  if (!targetTabId) {
-    primaryTabId = null; diag.primaryTabId = null;
-    const active = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    targetTabId = await tryTab(active[0]?.id);
-  }
-  if (!targetTabId) {
-    const all = await chrome.tabs.query({});
-    for (const t of all) {
-      const id = await tryTab(t.id);
-      if (id) { targetTabId = id; primaryTabId = id; diag.primaryTabId = id; break; }
-    }
-  }
-  if (!targetTabId) {
+  const located = await locateVideoTab();
+  if (!located) {
     return { error: "No video tab found. Open the video and try again." };
   }
+  const targetTabId = located.tabId;
 
   // Build the payload applySync expects. lastSeen → serverTime so the content
   // script projects partner's playing position forward to "now".
@@ -731,52 +774,9 @@ async function catchUpToPartner() {
 async function syncToMe() {
   if (!roomRef) return { error: "Not in a room." };
 
-  const tried = new Set();
-  let winnerTabId = null;
-  const trySnapshot = async (tabId) => {
-    if (!tabId || tried.has(tabId)) return null;
-    tried.add(tabId);
-    try {
-      const tab = await chrome.tabs.get(tabId);
-      if (!tab) return null;
-    } catch { return null; }
-    const snap = await getSnapshotFromAnyFrame(tabId);
-    if (snap) winnerTabId = tabId;
-    return snap;
-  };
-
-  let hit = await trySnapshot(primaryTabId);
-
-  // Primary tab is stale or videoless — clear it and try the active tab next.
-  if (!hit && primaryTabId) {
-    primaryTabId = null;
-    diag.primaryTabId = null;
-  }
-
-  if (!hit) {
-    const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    hit = await trySnapshot(activeTabs[0]?.id);
-  }
-
-  // Last resort: scan every tab for a video, preferring one that's playing.
-  if (!hit) {
-    const allTabs = await chrome.tabs.query({});
-    const candidates = [];
-    for (const tab of allTabs) {
-      const found = await trySnapshot(tab.id);
-      if (found) candidates.push({ tabId: tab.id, snap: found });
-    }
-    const playing = candidates.find(c => !c.snap.r.paused);
-    hit = (playing || candidates[0])?.snap || null;
-    if (hit) {
-      const winner = playing || candidates[0];
-      primaryTabId = winner.tabId;
-      winnerTabId = winner.tabId;
-      diag.primaryTabId = primaryTabId;
-    }
-  }
-
-  if (!hit) return { error: "No video found. Open the video tab and press play once, then try again." };
+  const located = await locateVideoTab();
+  if (!located) return { error: "No video found. Open the video tab and press play once, then try again." };
+  const { tabId: winnerTabId, hit } = located;
   const snapshot = hit.r;
 
   const writeAt = serverNow();
@@ -891,7 +891,10 @@ async function openPartnerVideo() {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     try {
-      await doBootstrap(); // Wait for session restore before processing ANY message
+      // Wait for session restore before processing ANY message. A failed
+      // restore must not take every handler down with it — it retries on the
+      // next message.
+      await doBootstrap().catch((err) => console.warn("[Duet] bootstrap:", err?.message || err));
 
       switch (message.type) {
         case "CREATE_ROOM":   sendResponse(await createRoom()); break;
@@ -978,10 +981,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           break;
 
         case "GET_STATUS": {
-          let peerCount = 0;
+          // The presence listener keeps lastPeerCount current; a fresh read
+          // is only a refinement, so offline it falls back instead of failing.
+          let peerCount = currentRoom ? lastPeerCount : 0;
           if (currentRoom && db) {
-            const snap = await db.ref(`presence/${currentRoom}`).get();
-            peerCount = snap.exists() ? Object.keys(snap.val()).length : 0;
+            try {
+              const snap = await withTimeout(db.ref(`presence/${currentRoom}`).get(), 3000, "Reading presence");
+              peerCount = snap.exists() ? Object.keys(snap.val()).length : 0;
+            } catch {}
           }
           diag.myUserId = myUserId;
           diag.peerCount = peerCount;
@@ -1067,47 +1074,59 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // ── Bootstrap ───────────────────────────────────────────────
 let bootstrapPromise = null;
 
+// Restores profile + room from storage. Every message handler awaits this, so
+// it must never hang or stay failed: its only network step is a bounded
+// room-existence check, and a rejection clears the cache so the next message
+// retries instead of every handler failing until the SW is recycled.
 function doBootstrap() {
-  if (!bootstrapPromise) bootstrapPromise = bootstrapInner();
+  if (!bootstrapPromise) {
+    bootstrapPromise = bootstrapInner().catch((err) => {
+      bootstrapPromise = null; // let the next message retry
+      throw err;
+    });
+  }
   return bootstrapPromise;
 }
 
 async function bootstrapInner() {
-  // Load display name and emoji early so any subsequent meta write includes it.
-  try {
-    const n = await chrome.storage.local.get(["myName", "myEmoji"]);
-    if (typeof n.myName === "string") myName = n.myName.slice(0, 32);
-    if (typeof n.myEmoji === "string") myEmoji = n.myEmoji;
-  } catch {}
+  const stored = await chrome.storage.local.get(["myName", "myEmoji", "currentRoom", "myUserId"]);
+  if (typeof stored.myName === "string") myName = stored.myName.slice(0, 32);
+  if (typeof stored.myEmoji === "string") myEmoji = stored.myEmoji;
 
-  try {
-    await initFirebase();
-  } catch {
-    return;
-  }
+  // No room → stay disconnected. This is the common case on every SW wake.
+  if (!stored.currentRoom || !stored.myUserId || currentRoom) return;
 
-  const stored = await chrome.storage.local.get(["currentRoom", "myUserId"]);
-  if (!stored.currentRoom) return;
-
-  const exists = (await db.ref(`rooms/${stored.currentRoom}`).get()).exists();
+  // The room may have been deleted while we were away (partner left last,
+  // idle cleanup). Check before writing anything — our own presence/ping
+  // writes would otherwise recreate the node. Bounded wait: a network
+  // failure means "unknown", and we resume optimistically (the SDK queues
+  // writes until it reconnects), so this can delay but never wedge startup.
+  initFirebase();
+  let exists = true;
+  try { exists = await roomExists(stored.currentRoom, 4000); } catch {}
+  if (currentRoom) return; // a create/join finished first
   if (!exists) {
+    dlog(`[Duet] Stored room ${stored.currentRoom} no longer exists`);
     await chrome.storage.local.remove(["currentRoom", "myUserId"]);
+    disconnectFirebase();
     return;
   }
 
+  // Rejoin with the same identity so we don't leave a ghost presence entry.
   currentRoom = stored.currentRoom;
   myUserId = stored.myUserId;
   setRoomRefs(currentRoom);
-  await presenceRef.set({ joined: firebase.database.ServerValue.TIMESTAMP });
+  presenceRef.set({ joined: firebase.database.ServerValue.TIMESTAMP }).catch(() => {});
   armDisconnectCleanup();
   attachListeners(currentRoom);
   validateRules().catch(() => {});
   dlog(`[Duet] Restored session: room ${currentRoom}`);
 }
 
-chrome.runtime.onStartup.addListener(doBootstrap);
-chrome.runtime.onInstalled.addListener(doBootstrap);
-doBootstrap();
+const bootstrapQuietly = () => { doBootstrap().catch(() => {}); };
+chrome.runtime.onStartup.addListener(bootstrapQuietly);
+chrome.runtime.onInstalled.addListener(bootstrapQuietly);
+bootstrapQuietly();
 
 // Clear primaryTabId proactively when its tab closes — otherwise SYNC_TO_ME
 // keeps targeting a dead tabId and fails until something else reclaims primary.
