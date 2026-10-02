@@ -17,6 +17,7 @@
     {
       "matches": ["<all_urls>"],
       "js": [
+        "invite-config.js",
         "content.js"
       ],
       "run_at": "document_idle",

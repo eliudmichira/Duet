@@ -359,6 +359,17 @@
       transform: translateY(0);
       box-shadow: 0 1px 4px rgba(0,0,0,0.30), var(--emboss-rim-faint), var(--emboss-base-soft);
     }
+    /* Secondary copy action: text-weight, no slab. */
+    .copy-btn.copy-btn-quiet {
+      margin-top: 6px;
+      background: none;
+      border-color: transparent;
+      box-shadow: none;
+      color: var(--muted);
+      font-weight: 500;
+      padding: 5px;
+    }
+    .copy-btn.copy-btn-quiet:hover { color: var(--text); border-color: transparent; box-shadow: none; }
     .copy-btn.copied {
       background: linear-gradient(180deg, rgba(94,226,160,0.18) 0%, rgba(94,226,160,0.08) 100%);
       border-color: rgba(94,226,160,0.3);
@@ -1290,7 +1301,8 @@
         <div class="room-card">
           <div class="room-label">Your room code</div>
           <div class="code-cells" id="room-code-display"></div>
-          <button class="copy-btn" id="copy-code-btn">Copy code</button>
+          <button class="copy-btn" id="copy-link-btn">Copy invite link</button>
+          <button class="copy-btn copy-btn-quiet" id="copy-code-btn">Copy code only</button>
         </div>
 
         <div class="peer-hint" id="peer-hint">
@@ -1427,6 +1439,7 @@
 
   </div>
 
+  <script src="invite-config.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

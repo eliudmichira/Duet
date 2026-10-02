@@ -8,9 +8,11 @@ A Chrome extension that keeps two people in perfect sync while watching any vide
 
 ## How it works
 
-1. Person A installs the extension and creates a room → gets a 6-character code
-2. Person B installs the extension and joins with that code
+1. Person A installs the extension, creates a room and clicks **Copy invite link**
+2. Person B opens the link — one click joins if they have Duet; otherwise the page offers the install and they join right after (the 6-character code still works in the popup too)
 3. Either person presses play or pause on any video → the other screen syncs **instantly**
+
+Invite links look like `https://pausepal-a4d71.web.app/join#K7QM2P`. The code sits in the `#` fragment, so it never reaches the web server. Joining always takes a real click on that page — a link alone can't put anyone in a room. The link domain is configured in `extension/invite-config.js`.
 
 A small overlay in the corner shows "Partner paused" or "Partner played" so you always know what happened.
 

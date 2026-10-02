@@ -70,6 +70,14 @@ $("join-code-input").addEventListener("keydown", (e) => {
   });
   nameInput.addEventListener("blur", persist);
 })();
+// Pasting a whole invite link into the code box should just work; the
+// field's maxlength would otherwise keep only "HTTPS:".
+$("join-code-input").addEventListener("paste", (e) => {
+  const code = DUET_INVITE.parse(e.clipboardData?.getData("text") || "");
+  if (!code) return;
+  e.preventDefault();
+  e.target.value = code;
+});
 $("join-code-input").addEventListener("input", (e) => {
   const cleaned = e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, "").slice(0, 6);
   if (cleaned !== e.target.value) e.target.value = cleaned;
@@ -80,16 +88,26 @@ $("leave-btn").addEventListener("click", async () => {
   setDisconnectedState();
 });
 
-$("copy-code-btn").addEventListener("click", async () => {
-  if (!currentRoomCode) return;
-  try { await navigator.clipboard.writeText(currentRoomCode); } catch {}
-  $("copy-code-btn").textContent = "✓ Copied to clipboard";
-  $("copy-code-btn").classList.add("copied");
-  setTimeout(() => {
-    $("copy-code-btn").textContent = "Copy code";
-    $("copy-code-btn").classList.remove("copied");
-  }, 1800);
-});
+// The invite link is the main way in: one click for someone who already has
+// Duet, and an install page for someone who doesn't. The bare code stays
+// available for reading out loud.
+function wireCopyButton(id, label, getText) {
+  const btn = $(id);
+  btn.addEventListener("click", async () => {
+    const text = getText();
+    if (!text) return;
+    let ok = true;
+    try { await navigator.clipboard.writeText(text); } catch { ok = false; }
+    btn.textContent = ok ? "✓ Copied to clipboard" : "Couldn't copy — select it manually";
+    btn.classList.toggle("copied", ok);
+    setTimeout(() => {
+      btn.textContent = label;
+      btn.classList.remove("copied");
+    }, 1800);
+  });
+}
+wireCopyButton("copy-link-btn", "Copy invite link", () => DUET_INVITE.link(currentRoomCode));
+wireCopyButton("copy-code-btn", "Copy code only", () => currentRoomCode);
 
 // ── Catch up to partner ────────────────────────────────────
 function syncMeBtnLabel() {

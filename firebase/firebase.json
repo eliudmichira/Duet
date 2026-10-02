@@ -17,6 +17,10 @@
       {
         "source": "/privacy",
         "destination": "/privacy.html"
+      },
+      {
+        "source": "/join",
+        "destination": "/join.html"
       }
     ],
     "headers": [

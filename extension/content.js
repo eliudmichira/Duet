@@ -1767,6 +1767,89 @@
     }
   });
 
+  // ── Invite page bridge ─────────────────────────────────────
+  // On Duet's own join page (…/join#CODE) tell the page the extension is
+  // installed, report room status, and act on its buttons. Guarded three
+  // ways: only the allowlisted invite hosts, only the top frame (no framing
+  // tricks), and only real user clicks (`isTrusted` can't be forged by page
+  // script). A link alone must never drop someone into a room — whoever is
+  // in it would see what they watch.
+  const INVITE = globalThis.DUET_INVITE;
+  if (isTopFrame && INVITE?.isInvitePage(location.href)) initInviteBridge();
+
+  function initInviteBridge() {
+    const post = (msg) => window.postMessage({ __duet_ext: true, ...msg }, location.origin);
+    const inviteCode = () => INVITE.parse(location.href);
+    let busy = false;
+    let pollTimer = null;
+
+    async function report() {
+      const status = await safeSend({ type: "GET_STATUS" });
+      const p = status?.partner;
+      post({
+        type: "status",
+        code: inviteCode(),
+        currentRoom: status?.currentRoom || null,
+        peerCount: status?.peerCount || 0,
+        partner: p ? {
+          name: typeof p.name === "string" ? p.name : "",
+          title: (typeof p.videoTitle === "string" && p.videoTitle) || (typeof p.pageTitle === "string" && p.pageTitle) || "",
+          hostname: typeof p.hostname === "string" ? p.hostname : "",
+          hasVideo: typeof p.url === "string"
+        } : null
+      });
+      return status;
+    }
+
+    // After joining, keep the page updated until the partner's video shows up
+    // (so it can offer "Open what they're watching"), for up to a minute.
+    function pollForPartnerVideo() {
+      clearInterval(pollTimer);
+      const until = Date.now() + 60000;
+      pollTimer = setInterval(async () => {
+        const status = await report();
+        if (typeof status?.partner?.url === "string" || Date.now() > until) clearInterval(pollTimer);
+      }, 1500);
+    }
+
+    window.addEventListener("message", (e) => {
+      if (e.source !== window || e.origin !== location.origin) return;
+      if (e.data?.__duet_page && e.data.type === "hello") report();
+    });
+    window.addEventListener("hashchange", () => report());
+
+    document.addEventListener("click", async (e) => {
+      if (!e.isTrusted || busy) return;
+      const btn = e.target instanceof Element ? e.target.closest("[data-duet-action]") : null;
+      if (!btn) return;
+      const action = btn.dataset.duetAction;
+      if (action !== "join" && action !== "open-video") return;
+      busy = true;
+      try {
+        if (action === "join") {
+          const code = inviteCode();
+          if (!code) { post({ type: "error", message: "This invite link doesn't contain a valid room code." }); return; }
+          post({ type: "joining" });
+          const res = await safeSend({
+            type: "JOIN_ROOM", roomCode: code,
+            leaveCurrent: btn.dataset.duetLeaveCurrent === "1"
+          });
+          if (!res) post({ type: "error", message: "Duet didn't respond. Reload the page and try again." });
+          else if (res.error) post({ type: "error", message: res.error });
+          else { await report(); pollForPartnerVideo(); }
+        } else {
+          const res = await safeSend({ type: "OPEN_PARTNER_URL", here: true });
+          if (res?.error) post({ type: "error", message: res.error });
+        }
+      } finally {
+        busy = false;
+      }
+    }, true);
+
+    document.documentElement.dataset.duetExtension = "1";
+    report();
+  }
+
   // ── Initial status fetch ───────────────────────────────────
   // Check local storage first: when not in a room (the common case) we don't
   // message the background at all, so ordinary page loads never wake the

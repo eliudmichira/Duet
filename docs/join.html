@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- img-src lists the CDNs the Duet extension's own in-page badge loads
+       emoji/avatars from: page CSP applies to elements content scripts add. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://cdn.jsdelivr.net https://api.dicebear.com; base-uri 'none'; form-action 'none'" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="robots" content="noindex" />
+  <title>Join me on Duet</title>
+  <meta name="description" content="You're invited to watch together on Duet — play, pause and seek stay in sync across two screens." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    :focus { outline: none; }
+    :focus-visible {
+      outline: 2px solid rgba(139, 92, 246, 0.55);
+      outline-offset: 3px;
+    }
+
+    :root {
+      --bg-0:    #08070d;
+      --border:  rgba(255,255,255,0.08);
+      --border-strong: rgba(255,255,255,0.14);
+      --text:    #f4f1ea;
+      --muted:   #8a8597;
+      --coral:   #ff8a6b;
+      --peach:   #ffc89a;
+      --violet:  #8b5cf6;
+      --indigo:  #6366f1;
+      --rose:    #f472b6;
+      --success: #5ee2a0;
+      --danger:  #ff6b7a;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: linear-gradient(180deg, #0c0a14 0%, var(--bg-0) 100%);
+      color: var(--text);
+      min-height: 100vh;
+      letter-spacing: -0.005em;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: -40%;
+      background:
+        radial-gradient(circle at 20% 15%, rgba(255,138,107,0.20), transparent 42%),
+        radial-gradient(circle at 85% 25%, rgba(139,92,246,0.22), transparent 45%),
+        radial-gradient(circle at 50% 95%, rgba(244,114,182,0.16), transparent 50%);
+      filter: blur(6px);
+      animation: drift 22s ease-in-out infinite alternate;
+      pointer-events: none;
+      z-index: 0;
+    }
+    @keyframes drift {
+      0%   { transform: translate(0, 0) rotate(0deg); }
+      100% { transform: translate(-4%, 3%) rotate(8deg); }
+    }
+
+    nav {
+      position: relative; z-index: 1;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1.25rem;
+    }
+    .nav-logo { display: flex; align-items: center; gap: .65rem; text-decoration: none; }
+    .logo-mark {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: conic-gradient(from 210deg, #ffd9b3, var(--peach), var(--coral), var(--rose), #c084fc, var(--violet), var(--indigo), #22d3ee, var(--success), #ffd9b3);
+      display: grid; place-items: center; position: relative;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.22) inset, 0 8px 24px rgba(244,114,182,0.30);
+    }
+    .logo-mark::before {
+      content: ''; position: absolute; inset: 3px; border-radius: 7px;
+      background: linear-gradient(180deg, rgba(15,13,24,0.94), rgba(8,7,13,0.97));
+    }
+    .logo-mark svg { position: relative; z-index: 1; width: 13px; height: 13px; }
+    .logo-text {
+      font-family: 'Instrument Serif', serif; font-style: italic; font-size: 1.3rem;
+      background: linear-gradient(135deg, var(--coral), var(--rose), var(--violet));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+
+    main {
+      position: relative; z-index: 1;
+      flex: 1;
+      display: grid; place-items: center;
+      padding: 1.5rem 1rem 4rem;
+    }
+
+    .card {
+      width: 100%; max-width: 440px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025));
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 2rem 1.5rem 1.75rem;
+      text-align: center;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+
+    .eyebrow {
+      font-size: .72rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--muted);
+    }
+    h1 {
+      font-family: 'Instrument Serif', serif; font-weight: 400;
+      font-size: clamp(2rem, 7vw, 2.5rem); line-height: 1.08; letter-spacing: -0.02em;
+      margin: .5rem 0 .75rem;
+    }
+    h1 em {
+      font-style: italic;
+      background: linear-gradient(135deg, var(--peach), var(--rose), var(--violet));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .lede { color: var(--muted); font-size: .95rem; line-height: 1.55; }
+
+    .code {
+      display: flex; justify-content: center; gap: 6px;
+      margin: 1.5rem 0;
+    }
+    .code span {
+      width: 42px; height: 52px;
+      display: grid; place-items: center;
+      font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 1.35rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.25);
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.35);
+    }
+
+    .actions { display: flex; flex-direction: column; gap: .6rem; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+      width: 100%;
+      padding: 14px 22px;
+      border-radius: 999px;
+      font: 700 .95rem 'Inter', sans-serif;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: transform .15s ease, box-shadow .25s ease, opacity .2s;
+    }
+    .btn-primary {
+      color: #14111c;
+      background: linear-gradient(180deg, var(--peach) 0%, var(--coral) 50%, var(--rose) 100%);
+      box-shadow: 0 8px 20px rgba(255,138,107,0.40), inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -2px 4px rgba(0,0,0,0.18);
+    }
+    .btn-secondary {
+      color: var(--text);
+      background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04));
+      border: 1px solid var(--border);
+    }
+    .btn:hover:not(:disabled) { transform: translateY(-2px); }
+    .btn:active:not(:disabled) { transform: translateY(0); }
+    .btn:disabled { opacity: .6; cursor: default; }
+
+    .note { color: var(--muted); font-size: .82rem; line-height: 1.5; margin-top: 1rem; }
+    .note strong { color: var(--text); font-weight: 600; }
+    .error {
+      margin-top: 1rem;
+      padding: .7rem .9rem;
+      border-radius: 12px;
+      background: rgba(255,107,122,0.10);
+      border: 1px solid rgba(255,107,122,0.28);
+      color: #ffb3bb;
+      font-size: .85rem; line-height: 1.45;
+    }
+    .now-watching {
+      margin: 1.25rem 0;
+      padding: .9rem 1rem;
+      border-radius: 14px;
+      background: rgba(0,0,0,0.22);
+      border: 1px solid var(--border);
+      text-align: left;
+      font-size: .9rem; line-height: 1.45;
+    }
+    .now-watching .who { color: var(--muted); font-size: .78rem; }
+    .now-watching .title {
+      font-weight: 600; margin-top: .15rem;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pulse {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--success); box-shadow: 0 0 10px var(--success);
+      margin-right: .4rem; vertical-align: 1px;
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes pulse { 50% { opacity: .35; } }
+
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+<nav>
+  <a class="nav-logo" href="index.html">
+    <div class="logo-mark">
+      <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="2" width="3.5" height="10" rx="1" fill="#f4f1ea" opacity="0.9"/>
+        <rect x="8.5" y="2" width="3.5" height="10" rx="1" fill="#f4f1ea" opacity="0.9"/>
+      </svg>
+    </div>
+    <span class="logo-text">Duet</span>
+  </a>
+</nav>
+
+<main>
+  <div class="card" aria-live="polite">
+
+    <!-- Waiting to hear from the extension -->
+    <section id="state-checking">
+      <p class="eyebrow">Duet invite</p>
+      <h1>One moment…</h1>
+      <p class="lede">Checking for the Duet extension.</p>
+    </section>
+
+    <!-- Link has no usable room code -->
+    <section id="state-invalid" hidden>
+      <p class="eyebrow">Duet invite</p>
+      <h1>This link is <em>incomplete</em></h1>
+      <p class="lede">The room code is missing or mistyped. Ask whoever sent it to copy the invite link again, or type their 6-character code into the Duet extension.</p>
+    </section>
+
+    <!-- Extension not installed -->
+    <section id="state-install" hidden>
+      <p class="eyebrow">You're invited</p>
+      <h1>Watch <em>together</em></h1>
+      <p class="lede">Play, pause and seek stay in sync on both your screens. Add Duet to your browser to join this room.</p>
+      <div class="code" data-code-cells></div>
+      <div class="actions">
+        <a class="btn btn-primary" id="install-primary" target="_blank" rel="noopener"></a>
+        <a class="btn btn-secondary" id="install-secondary" target="_blank" rel="noopener"></a>
+      </div>
+      <p class="note" id="install-note">After installing, come back to this tab — it reloads on its own and you can join with one click.</p>
+      <p class="note" id="mobile-note" hidden><strong>Open this link on your computer.</strong> Duet works in desktop Chrome, Edge and Firefox.</p>
+    </section>
+
+    <!-- Installed, ready to join -->
+    <section id="state-ready" hidden>
+      <p class="eyebrow">You're invited</p>
+      <h1>Watch <em>together</em></h1>
+      <p class="lede">Join this room and your video stays in sync with theirs.</p>
+      <div class="code" data-code-cells></div>
+      <div class="actions">
+        <button class="btn btn-primary" id="join-btn" type="button" data-duet-action="join">Join room</button>
+      </div>
+      <p class="note" id="switch-note" hidden></p>
+    </section>
+
+    <!-- In the room -->
+    <section id="state-joined" hidden>
+      <p class="eyebrow"><span class="pulse"></span>Connected</p>
+      <h1>You're <em>in</em></h1>
+      <p class="lede" id="joined-lede">Waiting for your partner…</p>
+      <div class="now-watching" id="now-watching" hidden>
+        <div class="who" id="now-who"></div>
+        <div class="title" id="now-title"></div>
+      </div>
+      <div class="actions" id="open-actions" hidden>
+        <button class="btn btn-primary" type="button" data-duet-action="open-video">Open it here</button>
+      </div>
+      <p class="note">Or open any video yourself — when you're both on it, pressing play on either screen plays both.</p>
+    </section>
+
+    <p class="error" id="error" role="alert" hidden></p>
+  </div>
+</main>
+
+<script src="join.js"></script>
+</body>
+</html>

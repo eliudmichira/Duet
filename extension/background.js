@@ -16,7 +16,8 @@ const dlog = (...args) => { if (DEBUG) console.log(...args); };
 if (typeof importScripts === "function") {
   importScripts(
     "vendor/firebase-app-compat.js",
-    "vendor/firebase-database-compat.js"
+    "vendor/firebase-database-compat.js",
+    "invite-config.js"
   );
 }
 
@@ -212,7 +213,10 @@ async function createRoom() {
   return { roomCode, myUserId, peerCount: 1 };
 }
 
-async function joinRoom(roomCode) {
+// opts.leaveCurrent: the user confirmed leaving the room they're in (invite
+// page "Leave and join"). Without it, joining while in another room fails
+// rather than silently abandoning the current session.
+async function joinRoom(roomCode, opts = {}) {
   roomCode = String(roomCode || "").toUpperCase().trim();
   if (!/^[A-HJ-NP-Z2-9]{6}$/.test(roomCode)) {
     return { error: "Invalid room code format. Codes are 6 characters, letters + numbers." };
@@ -250,6 +254,15 @@ async function joinRoom(roomCode) {
   if (present >= 2) {
     if (!currentRoom) disconnectFirebase();
     return { error: "This room already has two people. If you just left it, wait a minute and try again." };
+  }
+
+  // Only leave the current room once the target is known to be joinable.
+  if (currentRoom && currentRoom !== roomCode) {
+    if (!opts.leaveCurrent) {
+      return { error: "You're already in a room. Leave it first.", code: "in_other_room" };
+    }
+    await leaveRoom();
+    initFirebase(); // leaveRoom went offline
   }
 
   myUserId = generateUserId();
@@ -863,7 +876,9 @@ function broadcastPartnerMeta() {
 }
 
 // ── Open partner's URL ──────────────────────────────────────
-async function openPartnerVideo() {
+// `tabId`: navigate this tab (the invite page asking for itself) instead of
+// the tracked video tab.
+async function openPartnerVideo(tabId = null) {
   if (!partnerMeta?.url) return { error: "Partner hasn't shared a video yet." };
   // The URL comes from the room's shared DB node — only follow web links.
   let partnerUrl;
@@ -873,7 +888,7 @@ async function openPartnerVideo() {
   }
 
   // Try to redirect the exact tab we've been tracking, fallback to active tab
-  let targetTabId = primaryTabId;
+  let targetTabId = tabId || primaryTabId;
   if (!targetTabId) {
     const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     targetTabId = tabs[0]?.id;
@@ -898,7 +913,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       switch (message.type) {
         case "CREATE_ROOM":   sendResponse(await createRoom()); break;
-        case "JOIN_ROOM":     sendResponse(await joinRoom(message.roomCode)); break;
+        case "JOIN_ROOM":
+          sendResponse(await joinRoom(message.roomCode, { leaveCurrent: !!message.leaveCurrent }));
+          break;
         case "LEAVE_ROOM":    sendResponse(await leaveRoom()); break;
         case "GET_NAME":      sendResponse({ name: myName }); break;
         case "SET_NAME": {
@@ -977,7 +994,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           break;
 
         case "OPEN_PARTNER_URL":
-          sendResponse(await openPartnerVideo());
+          sendResponse(await openPartnerVideo(message.here ? _sender.tab?.id : null));
           break;
 
         case "GET_STATUS": {
@@ -1126,6 +1143,18 @@ async function bootstrapInner() {
 const bootstrapQuietly = () => { doBootstrap().catch(() => {}); };
 chrome.runtime.onStartup.addListener(bootstrapQuietly);
 chrome.runtime.onInstalled.addListener(bootstrapQuietly);
+
+// Content scripts aren't injected into tabs that were already open when the
+// extension was installed. Someone who followed an invite link, hit
+// "Install", and came back would see a page that can't find the extension —
+// reload any open invite pages so they pick it up and can join.
+async function reloadInviteTabs() {
+  const tabs = await chrome.tabs.query({ url: DUET_INVITE.TAB_PATTERNS });
+  await Promise.all(tabs.map(t => chrome.tabs.reload(t.id).catch(() => {})));
+}
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  if (reason === "install" || reason === "update") reloadInviteTabs().catch(() => {});
+});
 bootstrapQuietly();
 
 // Clear primaryTabId proactively when its tab closes — otherwise SYNC_TO_ME
