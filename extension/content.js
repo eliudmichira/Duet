@@ -834,7 +834,7 @@
       color: rgba(244,241,234,0.88);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .ping { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .ping { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
     .ping[data-q="good"] { color: var(--success); }
     .ping[data-q="ok"]   { color: var(--warn); }
     .ping[data-q="bad"]  { color: var(--danger); }
@@ -885,7 +885,7 @@
     /* Ghost: no lift — quieter than everything raised. */
     .btn-ghost {
       width: 100%; border: none; background: none; padding: 3px;
-      color: var(--muted); font-weight: 600; font-size: 11.5px;
+      color: var(--muted); font-weight: 600; font-size: 12px;
       transition: color .2s;
     }
     .btn-ghost:hover { color: var(--text); }
@@ -933,7 +933,7 @@
     .chat input.sent { border-color: rgba(94,226,160,0.7); }
     .chat .hint {
       position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
-      font-size: 11px; color: rgba(244,241,234,0.4); pointer-events: none;
+      font-size: 12px; color: rgba(244,241,234,0.4); pointer-events: none;
     }
 
     /* Emoji drawer: Lifted card popping above the badge. */
@@ -953,9 +953,9 @@
     .tabs::-webkit-scrollbar { display: none; }
     .tab {
       flex-shrink: 0; white-space: nowrap;
-      padding: 4px 10px; border-radius: 999px;
+      padding: 4px 8px; border-radius: 999px;
       border: 1px solid transparent; background: transparent;
-      color: var(--muted); font-size: 11px; font-weight: 600;
+      color: var(--muted); font-size: 12px; font-weight: 600;
       transition: color .2s, background .2s, box-shadow .25s;
     }
     .tab:hover { color: var(--text); }
@@ -970,7 +970,7 @@
       max-height: 148px; overflow-y: auto; scrollbar-width: thin;
     }
     .grid .key { height: 34px; font-size: 18px; }
-    .grid .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: 11px; padding: 12px 0; }
+    .grid .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: 12px; padding: 12px 0; }
 
     /* Minimized puck: small Lifted pill, same health echo. */
     .puck {
@@ -1069,7 +1069,7 @@
     .bubble-who {
       display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
       font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; font-style: normal;
-      font-size: 0.62em;
+      font-size: max(12px, 0.62em);
       color: var(--who); text-shadow: 0 0 8px color-mix(in srgb, var(--who) 40%, transparent);
     }
     .bubble.ltr { --who: #c4b5fd; }
