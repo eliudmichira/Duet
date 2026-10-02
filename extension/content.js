@@ -19,6 +19,7 @@
     lastPingMs: null,
     // Sync
     driftStatus: "waiting", // waiting | sync | warning | out_of_sync | mismatch
+    driftSeconds: null,     // my position − partner's (s): negative = I'm behind
     isApplyingRemote: false,
     partnerTyping: false,
     // Partners
@@ -808,6 +809,38 @@
     }
     .sep { color: var(--muted); font-weight: 500; }
     .status-emoji { font-size: 13px; line-height: 1; }
+
+    /* Partner's face. Its ring carries sync health (DESIGN.md echoed accent),
+       so the plain dot steps aside whenever a face is shown. */
+    .av {
+      --ring: rgba(255,255,255,0.14);
+      width: 20px; height: 20px; flex-shrink: 0;
+      display: grid; place-items: center; overflow: hidden;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.06);
+      font-size: 12px; line-height: 1;
+      box-shadow: 0 0 0 2px var(--ring);
+      transition: box-shadow .3s ease;
+    }
+    .av img.portrait { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .av.mono {
+      background: linear-gradient(135deg, var(--peach), var(--rose), var(--violet));
+      color: #14111c; font-weight: 800; font-size: 11px;
+    }
+    .av.plain { background: none; box-shadow: none; font-size: 13px; }
+    [data-health="good"] .av { --ring: rgba(94,226,160,0.80); }
+    [data-health="warn"] .av { --ring: rgba(252,211,77,0.85); }
+    [data-health="bad"]  .av { --ring: rgba(255,107,122,0.85); }
+    .has-face .dot { display: none; }
+    .av.typing { animation: duet-ring 1.2s ease-in-out infinite; }
+    @keyframes duet-ring {
+      50% { box-shadow: 0 0 0 3px var(--ring), 0 0 10px var(--ring); }
+    }
+    .puck .av { width: 22px; height: 22px; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; overflow: hidden;
+      clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+    }
     .status-text {
       flex: 1; min-width: 0;
       color: rgba(244,241,234,0.88);
@@ -1084,6 +1117,7 @@
       .badge, .flash, .toast, .puck, .key, .btn-primary, .icon-key {
         transition-duration: 0.05s !important;
       }
+      .av.typing { animation: none; }
     }
   `;
 
@@ -1310,8 +1344,10 @@
       el("span", "dot"),
       el("span", "brand", { text: "Duet" }),
       el("span", "sep", { text: "·" }),
-      el("span", "status-emoji", { id: "__pp_status_emoji" }),
-      el("span", "status-text", { id: "__pp_status_text", "aria-live": "polite" }),
+      el("span", "av plain", { id: "__pp_avatar" }),
+      el("span", "status-text", { id: "__pp_status_text" }),
+      // Screen readers hear state changes, not every drift tick.
+      el("span", "sr-only", { id: "__pp_status_sr", "aria-live": "polite" }),
       el("span", "ping", { id: "__pp_ping" })
     );
     const minBtn = el("button", "icon-key", { id: "__pp_min_btn", type: "button", title: "Minimize", "aria-label": "Minimize Duet", text: "−" });
@@ -1365,7 +1401,7 @@
 
     // Minimized puck: click to expand, drag to move.
     const puck = el("div", "puck", { id: "__pp_tray", title: "Click to expand · drag to move", role: "button", tabindex: "0", "aria-label": "Expand Duet" });
-    puck.append(el("span", "dot"), el("span", "status-emoji", { id: "__pp_tray_emoji" }));
+    puck.append(el("span", "dot"), el("span", "av plain", { id: "__pp_tray_av" }));
     installBadgeDrag(puck);
     puck.addEventListener("click", (e) => {
       if (e.defaultPrevented) return; // drag finish swallowed it
@@ -1518,15 +1554,68 @@
     }
   }
 
+  // 1.4s · 12s · 12m 34s · 1h 05m
+  function fmtDrift(sec) {
+    const a = Math.abs(sec);
+    if (a < 10) return `${a.toFixed(1)}s`;
+    if (a < 60) return `${Math.round(a)}s`;
+    if (a < 3600) return `${Math.floor(a / 60)}m ${String(Math.round(a % 60)).padStart(2, "0")}s`;
+    return `${Math.floor(a / 3600)}h ${String(Math.floor((a % 3600) / 60)).padStart(2, "0")}m`;
+  }
+
+  // text: short label beside the face; title: the full sentence (tooltip).
   function badgeStatus() {
-    if (S.peerCount < 2) return { emoji: S.partnerEmoji && !isAvatarCode(S.partnerEmoji) ? S.partnerEmoji : "👋", text: "waiting for partner" };
-    if (S.partnerTyping)  return { emoji: "💬", text: `${S.partnerName || "partner"} is typing…` };
+    const who = S.partnerName || "your partner";   // mid-sentence
+    const Who = S.partnerName || "Your partner";   // sentence start
+    if (S.peerCount < 2) return { face: false, emoji: "👋", text: "waiting for partner", title: "Waiting for your partner to join" };
+    if (S.partnerTyping)  return { face: true, typing: true, text: "typing…", title: `${Who} is typing` };
+    const d = S.driftSeconds;
+    const gap = typeof d === "number" && Math.abs(d) >= 0.1
+      ? { text: `${fmtDrift(d)} ${d < 0 ? "behind" : "ahead"}`,
+          title: `You're ${fmtDrift(d)} ${d < 0 ? "behind" : "ahead of"} ${who}` }
+      : null;
     switch (S.driftStatus) {
-      case "sync":        return { emoji: "💞", text: "in sync" };
-      case "warning":     return { emoji: "⏳", text: "slight delay" };
-      case "out_of_sync": return { emoji: "⚠️", text: "out of sync" };
-      case "mismatch":    return { emoji: "🎬", text: "different video" };
-      default:            return { emoji: "📺", text: "waiting for video" };
+      case "sync":        return { face: true, text: "in sync", title: `In sync with ${who}` };
+      case "warning":
+      case "out_of_sync": return { face: true, ...(gap || { text: "out of sync", title: `Out of sync with ${who}` }) };
+      case "mismatch":    return { face: true, text: "different video", title: `${Who} is watching something else` };
+      default:            return { face: true, text: "no video yet", title: `${Who} is here — waiting for a video` };
+    }
+  }
+
+  // Fills an avatar slot with the partner's portrait, emoji, or initial —
+  // or a plain status emoji when there's no partner to show. Only touches
+  // the DOM when what's shown actually changes.
+  function setFace(slot, face, fallbackEmoji, typing) {
+    if (!slot) return;
+    slot.classList.toggle("typing", !!(face && typing));
+    const value = S.partnerEmoji;
+    const name = (S.partnerName || "").trim();
+    let kind, key;
+    if (!face)                                                 { kind = "plain";    key = `p:${fallbackEmoji}`; }
+    else if (isAvatarCode(value) && avatarUrl(value))          { kind = "portrait"; key = `a:${value}`; }
+    else if (typeof value === "string" && value && value.length <= 4) { kind = "emoji"; key = `e:${value}`; }
+    else if (name)                                             { kind = "mono";     key = `m:${Array.from(name)[0].toUpperCase()}`; }
+    else                                                       { kind = "emoji";    key = "e:👤"; }
+    if (slot.dataset.v === key) return;
+    slot.dataset.v = key;
+    slot.className = `av${kind === "plain" ? " plain" : kind === "mono" ? " mono" : ""}${face && typing ? " typing" : ""}`;
+    if (kind === "portrait") {
+      const img = el("img", "portrait", { src: avatarUrl(value), alt: name || "Partner", draggable: "false", referrerpolicy: "no-referrer" });
+      // Portraits come from a CDN some pages block (CSP) — show the initial
+      // instead of a broken-image icon. dataset.v is left alone so render()
+      // doesn't keep retrying the same failing URL.
+      img.addEventListener("error", () => {
+        if (slot.dataset.v !== key) return;
+        slot.classList.add("mono");
+        if (name) slot.replaceChildren(document.createTextNode(Array.from(name)[0].toUpperCase()));
+        else slot.innerHTML = twemojiHtml("👤");
+      }, { once: true });
+      slot.replaceChildren(img);
+    } else if (kind === "mono") {
+      slot.replaceChildren(document.createTextNode(key.slice(2)));
+    } else {
+      slot.innerHTML = twemojiHtml(key.slice(2));
     }
   }
 
@@ -1544,16 +1633,22 @@
     }
 
     const health = badgeHealth();
-    const { emoji, text } = badgeStatus();
+    const status = badgeStatus();
     badge.dataset.health = health;
-    if (puck) puck.dataset.health = health;
-
-    const emojiHtml = twemojiHtml(emoji);
-    const statusEmoji = $ui("__pp_status_emoji");
-    if (statusEmoji.dataset.v !== emoji) { statusEmoji.innerHTML = emojiHtml; statusEmoji.dataset.v = emoji; }
-    const trayEmoji = $ui("__pp_tray_emoji");
-    if (trayEmoji && trayEmoji.dataset.v !== emoji) { trayEmoji.innerHTML = emojiHtml; trayEmoji.dataset.v = emoji; }
-    $ui("__pp_status_text").textContent = text;
+    badge.classList.toggle("has-face", status.face);
+    if (puck) {
+      puck.dataset.health = health;
+      puck.classList.toggle("has-face", status.face);
+      puck.title = `${status.title} · click to expand`;
+    }
+    setFace($ui("__pp_avatar"), status.face, status.emoji, status.typing);
+    setFace($ui("__pp_tray_av"), status.face, status.emoji, status.typing);
+    const statusText = $ui("__pp_status_text");
+    statusText.textContent = status.text;
+    statusText.title = status.title;
+    const srKey = `${S.peerCount >= 2}|${S.driftStatus}|${S.partnerTyping}`;
+    const sr = $ui("__pp_status_sr");
+    if (sr && sr.dataset.k !== srKey) { sr.dataset.k = srKey; sr.textContent = status.title; }
 
     const ping = $ui("__pp_ping");
     if (typeof S.lastPingMs === "number") {
@@ -1818,6 +1913,7 @@
         m && typeof m.currentTime === "number" && typeof m.url === "string" &&
         typeof m.lastSeen === "number" && (message.serverNow - m.lastSeen) < 15000;
 
+      patch.driftSeconds = null;
       if (S.peerCount < 2 || !hasLiveData(message.partner) || !hasLiveData(message.mine)) {
         patch.driftStatus = "waiting";
       } else {
@@ -1826,11 +1922,12 @@
         if (mismatch) {
           patch.driftStatus = "mismatch";
         } else if (message.mine.paused || message.partner.paused) {
-          const drift = Math.abs((message.mine.currentTime || 0) - (message.partner.currentTime || 0));
-          patch.driftStatus = drift > 1.5 ? "out_of_sync" : "sync";
+          patch.driftSeconds = (message.mine.currentTime || 0) - (message.partner.currentTime || 0);
+          patch.driftStatus = Math.abs(patch.driftSeconds) > 1.5 ? "out_of_sync" : "sync";
         } else {
           const project = m => (m.currentTime || 0) + Math.max(0, (message.serverNow - m.lastSeen) / 1000);
-          const drift = Math.abs(project(message.mine) - project(message.partner));
+          patch.driftSeconds = project(message.mine) - project(message.partner);
+          const drift = Math.abs(patch.driftSeconds);
           if (drift > 2.0) patch.driftStatus = "out_of_sync";
           else if (drift > 0.8) patch.driftStatus = "warning";
           else patch.driftStatus = "sync";

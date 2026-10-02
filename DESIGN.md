@@ -209,6 +209,7 @@ Same tokens, scoped to a shadow root so the host page can't restyle it.
 | `.chat input`                 | Recessed     | Hole you type into                                 |
 | `.drawer` (emoji picker)      | Lifted (lg)  | Pops above the badge; tabs are pills, grid is a tray |
 | `.puck` (minimized)           | Lifted (sm)  | Same health echo as the badge                      |
+| `.av` (partner face)          | Ring         | Portrait / emoji / initial; its 2px ring carries sync health and replaces the status dot. Pulses while the partner types |
 | `.flash`, `.toast`            | Lifted       | Accent-tinted cast: play green, pause peach, leave red |
 | `.icon-key` (minimize)        | Flat → lifts on hover | Small object, -1px travel                  |
 
