@@ -894,12 +894,14 @@
       badge.id = "__duet_badge";
       badge.style.cssText = `
         position: relative;
-        background: #18181b;
-        border: 1px solid #27272a;
-        border-radius: 12px;
-        color: #fafafa; font-size: 12px; font-weight: 500;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-        transition: opacity 0.3s, transform 0.3s;
+        background: linear-gradient(135deg, rgba(15,13,24,0.92), rgba(8,7,13,0.94));
+        backdrop-filter: blur(16px) saturate(1.4);
+        -webkit-backdrop-filter: blur(16px) saturate(1.4);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 16px;
+        color: #f4f1ea; font-size: 11.5px; font-weight: 600; letter-spacing: 0.01em;
+        box-shadow: 0 10px 28px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04) inset;
+        transition: opacity 0.35s, transform 0.35s;
         opacity: 0; transform: translateY(6px);
         display: flex; flex-direction: column; pointer-events: auto;
       `;
@@ -918,15 +920,15 @@
       controls.style.cssText = "display: none; flex-direction: column; gap: 8px; padding: 0 14px 12px 14px;";
       
       controls.innerHTML = `
-        <div style="height: 1px; background: #27272a; width: 100%; margin-bottom: 2px;"></div>
-        <button id="__pp_sync_btn" aria-label="Sync partner to my current timestamp" style="background: #27272a; border: 1px solid #3f3f46; color: #fafafa; border-radius: 8px; padding: 7px; font-weight: 500; cursor: pointer; transition: background 0.15s, border-color 0.15s; font-size: 12px;">${syncBtnDefaultLabel()}</button>
-        <div style="display: flex; gap: 4px; align-items: center;">
-          ${['😂', '💖', '🔥', '😭'].map(e => `<button class="__pp_re_btn" data-emoji="${e}" aria-label="Send ${e} reaction" style="background: none; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; padding: 4px 6px; transition: background 0.15s; flex: 1;">${twemojiHtml(e)}</button>`).join('')}
-          <button id="__pp_more_emojis" title="More emojis" aria-label="Open full emoji picker" style="background: #27272a; border: 1px solid #3f3f46; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; padding: 4px 8px; color: #a1a1aa; flex-shrink: 0;">+</button>
+        <div style="height: 1px; background: rgba(255,255,255,0.1); width: 100%; margin-bottom: 2px;"></div>
+        <button id="__pp_sync_btn" aria-label="Sync partner to my current timestamp" style="background: rgba(255,255,255,0.1); border: none; color: white; border-radius: 6px; padding: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s; font-size: 11px;">${syncBtnDefaultLabel()}</button>
+        <div style="display: flex; gap: 6px; align-items: center;">
+          ${['😂', '💖', '🔥', '😭'].map(e => `<button class="__pp_re_btn" data-emoji="${e}" aria-label="Send ${e} reaction" style="background: rgba(255,255,255,0.05); border: none; border-radius: 6px; cursor: pointer; font-size: 15px; padding: 4px 6px; transition: background 0.2s; flex: 1;">${twemojiHtml(e)}</button>`).join('')}
+          <button id="__pp_more_emojis" title="More emojis" aria-label="Open full emoji picker" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 700; padding: 4px 8px; color: rgba(244,241,234,0.7); flex-shrink: 0;">+</button>
         </div>
         <div style="position: relative;">
-          <input id="__pp_chat_input" type="text" aria-label="Type a message to send to your partner" placeholder="Send a message…" maxlength="140" autocomplete="off" spellcheck="false" style="width: 100%; background: #09090b; border: 1px solid #27272a; border-radius: 8px; padding: 6px 26px 6px 8px; color: #fafafa; font-family: inherit; font-size: 11px; outline: none; transition: border-color 0.15s;" />
-          <span id="__pp_chat_hint" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 9px; color: #71717a; pointer-events: none;">↵</span>
+          <input id="__pp_chat_input" type="text" aria-label="Type a message to send to your partner" placeholder="Send a message…" maxlength="140" autocomplete="off" spellcheck="false" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 6px 26px 6px 8px; color: #f4f1ea; font-family: inherit; font-size: 11px; outline: none; transition: border-color 0.2s;" />
+          <span id="__pp_chat_hint" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 9px; color: rgba(244,241,234,0.4); pointer-events: none;">↵</span>
         </div>
       `;
 
@@ -938,10 +940,12 @@
       emojiPopover.style.cssText = `
         display: none; position: absolute; bottom: calc(100% + 8px); right: 0;
         flex-direction: column; gap: 6px;
-        background: #18181b;
-        border: 1px solid #27272a;
+        background: linear-gradient(135deg, rgba(15,13,24,0.96), rgba(8,7,13,0.98));
+        backdrop-filter: blur(16px) saturate(1.4);
+        -webkit-backdrop-filter: blur(16px) saturate(1.4);
+        border: 1px solid rgba(255,255,255,0.10);
         border-radius: 12px; padding: 8px;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+        box-shadow: 0 14px 30px rgba(0,0,0,0.5);
         width: 240px; pointer-events: auto;
       `;
       emojiPopover.innerHTML = `
@@ -1150,14 +1154,16 @@
       tray.id = "__pp_tray";
       tray.style.cssText = `
         display: none; align-items: center; gap: 6px;
-        background: #18181b;
-        border: 1px solid #27272a;
+        background: linear-gradient(135deg, rgba(15,13,24,0.95), rgba(8,7,13,0.97));
+        backdrop-filter: blur(16px) saturate(1.4);
+        -webkit-backdrop-filter: blur(16px) saturate(1.4);
+        border: 1px solid rgba(255,255,255,0.10);
         border-radius: 999px;
         padding: 6px 12px 6px 10px;
-        color: #fafafa; font-size: 12px; font-weight: 600;
+        color: #f4f1ea; font-size: 12px; font-weight: 700;
         cursor: grab; pointer-events: auto; user-select: none;
         touch-action: none;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        box-shadow: 0 8px 22px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04) inset;
       `;
       tray.title = "Click to expand · drag to move";
       overlay.appendChild(tray);
@@ -1191,8 +1197,8 @@
 
       const topbar = document.getElementById("__pp_topbar");
       topbar.innerHTML = `
-        <span style="width:7px;height:7px;border-radius:50%;background:${color};display:inline-block;"></span>
-        <span style="color:#fafafa;font-weight:600">Duet</span>
+        <span style="width:7px;height:7px;border-radius:50%;background:${color};box-shadow:0 0 8px ${color}, 0 0 0 3px ${color}1f;display:inline-block;transition:all 0.3s;"></span>
+        <span style="background:linear-gradient(110deg,#ffc89a,#f472b6,#8b5cf6);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700">Duet</span>
         <span style="color:rgba(244,241,234,0.55);font-weight:500">·</span>
         <span style="font-size:12px;line-height:1;">${twemojiHtml(emoji)}</span>
         <span style="color:rgba(244,241,234,0.85);transition:color 0.3s;flex:1;">${text}</span>
@@ -1210,7 +1216,7 @@
       const tray = document.getElementById("__pp_tray");
       if (tray) {
         tray.innerHTML = `
-          <span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;"></span>
+          <span style="width:8px;height:8px;border-radius:50%;background:${color};box-shadow:0 0 8px ${color};display:inline-block;"></span>
           <span style="font-size:14px;line-height:1;">${twemojiHtml(emoji)}</span>
         `;
       }
@@ -1284,17 +1290,19 @@
       flash = document.createElement("div");
       flash.id = "__duet_flash";
       flash.style.cssText = `
-        background: #18181b;
-        border: 1px solid #27272a;
-        border-radius: 10px;
-        color: #fafafa;
-        font-size: 13px; font-weight: 500;
+        background: linear-gradient(135deg, rgba(15,13,24,0.94), rgba(8,7,13,0.96));
+        backdrop-filter: blur(16px) saturate(1.4);
+        -webkit-backdrop-filter: blur(16px) saturate(1.4);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 14px;
+        color: #f4f1ea;
+        font-size: 13px; font-weight: 600;
         padding: 10px 14px;
         display: flex; align-items: center; gap: 10px;
         pointer-events: none;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-        transition: opacity 0.3s ease, transform 0.3s ease;
-        opacity: 0; transform: translateY(8px);
+        box-shadow: 0 14px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04) inset;
+        transition: opacity 0.4s ease, transform 0.4s ease;
+        opacity: 0; transform: translateY(10px) scale(0.96);
       `;
       overlay.insertBefore(flash, overlay.firstChild);
     }
@@ -1309,8 +1317,8 @@
     // the flash visually maps to who triggered it.
     const avatarMarkup = avatarHtml(S.partnerEmoji, 22);
     const iconMarkup = avatarMarkup
-      ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;overflow:hidden;flex-shrink:0;border:1px solid #27272a;">${avatarMarkup}</span>`
-      : `<span style="display:grid;place-items:center;width:22px;height:22px;border-radius:7px;background:${accent}1a;color:${accent};">${glyph}</span>`;
+      ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;overflow:hidden;flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,0.10);">${avatarMarkup}</span>`
+      : `<span style="display:grid;place-items:center;width:22px;height:22px;border-radius:7px;background:${accent}1a;color:${accent};box-shadow:0 0 0 1px ${accent}33 inset">${glyph}</span>`;
     flash.innerHTML = `${iconMarkup}<span>${twemojiHtml(label)}</span>`;
     flash.style.opacity = "1";
     flash.style.transform = "translateY(0) scale(1)";
@@ -1363,22 +1371,24 @@
       toast.style.cssText = `
         position: fixed; left: 50%; top: 60px; transform: translateX(-50%) translateY(-12px);
         z-index: 2147483647; pointer-events: none;
-        background: #18181b;
-        border: 1px solid #27272a;
+        background: linear-gradient(135deg, rgba(15,13,24,0.96), rgba(8,7,13,0.98));
+        backdrop-filter: blur(14px) saturate(1.4);
+        -webkit-backdrop-filter: blur(14px) saturate(1.4);
+        border: 1px solid rgba(255,255,255,0.10);
         border-radius: 999px;
         padding: 8px 16px;
-        color: #fafafa;
+        color: #f4f1ea;
         font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
-        font-size: 12px; font-weight: 600;
+        font-size: 12px; font-weight: 700;
         display: inline-flex; align-items: center; gap: 8px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        box-shadow: 0 14px 30px rgba(0,0,0,0.5);
         opacity: 0;
         transition: opacity 0.3s, transform 0.3s;
       `;
       (document.documentElement || document.body).appendChild(toast);
     }
     const accent = kind === "leave" ? "#ff6b7a" : "#5ee2a0";
-    const dot = `<span style="width:8px;height:8px;border-radius:50%;background:${accent};display:inline-block;"></span>`;
+    const dot = `<span style="width:8px;height:8px;border-radius:50%;background:${accent};box-shadow:0 0 8px ${accent};display:inline-block;"></span>`;
     const av = avatarHtml(S.partnerEmoji, 18);
     toast.innerHTML = `${av ? `<span style="display:inline-flex;width:18px;height:18px;border-radius:50%;overflow:hidden;">${av}</span>` : dot}<span>${text}</span>`;
     requestAnimationFrame(() => {
@@ -1404,14 +1414,16 @@
       pill.style.cssText = `
         position: fixed; left: 50%; top: 22px; transform: translateX(-50%);
         z-index: 2147483647; pointer-events: none;
-        background: #18181b;
-        border: 1px solid #27272a;
+        background: linear-gradient(135deg, rgba(15,13,24,0.94), rgba(8,7,13,0.96));
+        backdrop-filter: blur(14px) saturate(1.4);
+        -webkit-backdrop-filter: blur(14px) saturate(1.4);
+        border: 1px solid rgba(255,255,255,0.10);
         border-radius: 999px;
         padding: 7px 14px;
-        color: #fafafa;
+        color: #f4f1ea;
         font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
         font-size: 12px; font-weight: 600;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+        box-shadow: 0 10px 24px rgba(0,0,0,0.4);
         opacity: 0;
         transition: opacity 0.25s, transform 0.25s;
       `;
