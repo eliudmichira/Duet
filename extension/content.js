@@ -76,32 +76,21 @@
     });
   } catch {}
 
-  // Avatar codes (mirror of popup.js's mapping). Stored as compact "av:NN"
-  // codes; we resolve them to DiceBear illustrated portraits on demand.
-  // Kept in sync with popup.js — if seeds/gradients change there, mirror here.
-  const __DUET_AVATAR_BASE = "https://api.dicebear.com/9.x/adventurer/svg?seed=";
-  const __DUET_AVATAR_SEEDS = [
-    "Mochi","Pepper","Suki","Felix","Luna","Nico","Sasha","Kira","Theo","Ivy","Rio","Juno",
-    "Zara","Atlas","Wren","Hugo","Mila","Bo","Indigo","Soren","Nova","Cleo","Otis","Vesper"
-  ];
-  const __DUET_AVATAR_BG = [
-    "ffd5dc,ff9eb8","ffdfbf,ffb37b","ffe5b4,f4c542","c8e6c9,7bc99c",
-    "b6e3f4,7ec8e3","c0aede,9d7adf","f8bbd0,e57ea3","d1d4f9,8b9cf2",
-    "ffc89a,ff7e5f","a8e6cf,5ec27a","ffeaa7,fdcb6e","fab1a0,e17055",
-    "fd79a8,d63384","74b9ff,0984e3","a29bfe,6c5ce7","fdcb6e,f39c12",
-    "e17055,c0392b","00b894,00897b","ff7675,d63031","fd79a8,e84393",
-    "55efc4,00b894","81ecec,00cec9","ffeaa7,fab1a0","dfe6e9,b2bec3"
-  ];
-  // ── Twemoji: replace Unicode emoji with Twitter SVG images ──
-  const TWEMOJI_CDN = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/";
-  function twemojiCodePoints(str) {
-    const cps = [];
-    for (let i = 0; i < str.length; i++) {
-      let cp = str.codePointAt(i);
-      if (cp > 0xFFFF) i++; // skip surrogate pair
-      cps.push(cp.toString(16));
-    }
-    return cps.join("-");
+  // ── Bundled images (no CDN) ────────────────────────────────
+  // Emoji and avatar artwork ships inside the extension (vendor/, generated
+  // by tools/vendor-assets.mjs): no third-party requests from people's pages,
+  // and nothing for a page's CSP to block. Emoji that aren't bundled render
+  // as the system emoji.
+  const BUNDLED_EMOJI = globalThis.DUET_TWEMOJI || new Set();
+  const AVATAR_COUNT = 24; // av:00 … av:23 — see tools/vendor-assets.mjs
+  function assetUrl(path) {
+    try { return chrome.runtime.getURL(path); } catch { return null; } // context gone
+  }
+  // Twemoji file naming: hex code points joined by "-", with U+FE0F dropped
+  // unless the sequence has a ZWJ. Must match tools/vendor-assets.mjs.
+  function twemojiFile(emoji) {
+    const text = emoji.includes("\u200D") ? emoji : emoji.replace(/\uFE0F/g, "");
+    return Array.from(text, ch => ch.codePointAt(0).toString(16)).join("-");
   }
   // Every string that reaches innerHTML in the host page must pass through
   // this: partner names, labels, and anything relayed via postMessage are
@@ -116,9 +105,10 @@
   function twemojiHtml(text) {
     if (text == null) return "";
     return escapeHtml(text).replace(/\p{Emoji_Presentation}|\p{Emoji}\uFE0F/gu, function(match) {
-      const cp = twemojiCodePoints(match);
-      // CSP-safe: use img tag with src attribute (no inline styles, no eval)
-      return '<img class="twemoji" draggable="false" alt="' + match.replace(/"/g, '&quot;') + '" src="' + TWEMOJI_CDN + cp + '.svg" width="16" height="16">';
+      const file = twemojiFile(match);
+      const src = BUNDLED_EMOJI.has(file) ? assetUrl(`vendor/twemoji/${file}.svg`) : null;
+      if (!src) return match; // system emoji
+      return '<img class="twemoji" draggable="false" alt="' + match + '" src="' + src + '" width="16" height="16">';
     });
   }
 
@@ -126,10 +116,8 @@
   function avatarUrl(code) {
     if (!isAvatarCode(code)) return null;
     const idx = parseInt(code.slice(3), 10);
-    const seed = __DUET_AVATAR_SEEDS[idx];
-    if (!seed) return null;
-    const bg = __DUET_AVATAR_BG[idx % __DUET_AVATAR_BG.length];
-    return `${__DUET_AVATAR_BASE}${encodeURIComponent(seed)}&backgroundColor=${bg}&backgroundType=gradientLinear`;
+    if (!(idx >= 0 && idx < AVATAR_COUNT)) return null;
+    return assetUrl(`vendor/avatars/av-${code.slice(3)}.svg`);
   }
   // Returns an HTML snippet for an avatar — either an <img> for codes, or the
   // raw emoji glyph. `size` is in px. Safe to inline (no user-controlled data).

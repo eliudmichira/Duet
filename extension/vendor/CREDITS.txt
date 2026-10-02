@@ -1,0 +1,12 @@
+Third-party artwork bundled with Duet
+=====================================
+
+Emoji graphics (vendor/twemoji/)
+  Twemoji — Copyright Twitter, Inc. and other contributors (jdecked/twemoji)
+  Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+  Packaged via @twemoji/svg 15.0.0 (MIT).
+
+Avatar portraits (vendor/avatars/)
+  "Adventurer" by Lisa Wischofsky, via DiceBear (https://www.dicebear.com)
+  Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+  Generated with @dicebear/core + @dicebear/collection 9.4.2 (MIT).

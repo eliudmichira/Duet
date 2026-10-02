@@ -263,3 +263,7 @@ User A presses pause
 ---
 
 *Made with ❤️ for the couples, best friends, and long-distance families who just want to watch a movie together.*
+
+## Credits
+
+Emoji artwork is [Twemoji](https://github.com/jdecked/twemoji) and avatar portraits are DiceBear's "Adventurer" by Lisa Wischofsky — both CC BY 4.0, bundled in `extension/vendor/` (see `extension/vendor/CREDITS.txt`). Regenerate them with `cd tools && npm install && npm run vendor-assets`.

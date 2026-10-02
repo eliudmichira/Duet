@@ -18,10 +18,18 @@
       "matches": ["<all_urls>"],
       "js": [
         "invite-config.js",
+        "vendor/twemoji-set.js",
         "content.js"
       ],
       "run_at": "document_idle",
       "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["vendor/twemoji/*.svg", "vendor/avatars/*.svg"],
+      "matches": ["<all_urls>"],
+      "use_dynamic_url": true
     }
   ],
   "action": {
