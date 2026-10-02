@@ -250,7 +250,8 @@ function updatePeerHint(count) {
     el.innerHTML = `<span class="peer-dot connected"></span><span>${msg}</span>`;
     el.classList.add("ready");
     $("control-row").style.display = "flex";
-    $("together-row").style.display = "inline-flex";
+    $("together-row").style.display = "block";
+    renderStory();
     $("chat-bar").style.display = "block";
   } else {
     el.innerHTML = `<span class="peer-dot"></span><span>Waiting for partner to join…</span>`;
@@ -541,9 +542,11 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "POPUP_PEER_COUNT") {
     if (currentRoomCode) updatePeerHint(msg.peerCount);
   } else if (msg.type === "POPUP_PARTNER_META") {
+    const prevName = partnerMeta?.name;
     partnerMeta = msg.partner;
     myMeta = msg.mine;
     renderPartnerCard();
+    if (partnerMeta?.name !== prevName) renderStory();
   } else if (msg.type === "POPUP_TOGETHER") {
     togetherInfo = msg.together || { since: null, total: 0 };
     if (typeof msg.serverNow === "number") serverClockOffset = msg.serverNow - Date.now();
@@ -576,6 +579,33 @@ function fmtTogether(sec) {
   const s = sec % 60;
   return s ? `${m}m ${s}s` : `${m}m`;
 }
+
+// ── Our story ──────────────────────────────────────────────
+// History with this partner, from the local tally background.js keeps
+// (time both of you were playing the same video, per partner name).
+const STORY_KEY = "__duet_story";
+function fmtStoryTime(sec) {
+  const m = Math.floor(sec / 60);
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+}
+async function renderStory() {
+  const name = (partnerMeta && typeof partnerMeta.name === "string" && partnerMeta.name.trim()) || "";
+  $("story-name").textContent = name || "your partner";
+  let entry = null;
+  try {
+    const { [STORY_KEY]: story } = await chrome.storage.local.get(STORY_KEY);
+    entry = story?.partners?.[name.toLowerCase() || "__unnamed"] || null;
+  } catch {}
+  const seconds = entry?.seconds || 0;
+  const nights = entry?.days ? Object.keys(entry.days).length : 0;
+  $("story-stats").textContent = seconds < 60
+    ? "Your story starts tonight — press play together."
+    : `${fmtStoryTime(seconds)} watched together · ${nights} ${nights === 1 ? "night" : "nights"}`;
+}
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes[STORY_KEY] && currentRoomCode) renderStory();
+});
 
 // Tick the counter + drift every second while popup is open
 function startTogetherTicker() {

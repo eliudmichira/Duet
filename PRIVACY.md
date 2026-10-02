@@ -69,6 +69,10 @@ Inside your browser's `chrome.storage.local`:
 - The position of the floating badge on screen and whether you've
   minimized it
 - A small diagnostic record of the last few writes (for debugging)
+- "Our story" totals: for each partner display name, how long the two of
+  you played the same video at the same time, which days you did, and the
+  last title — shown in the popup as e.g. "12h 30m watched together ·
+  6 nights"
 
 These never leave your computer. They are removed when you uninstall
 the extension.
@@ -95,6 +99,9 @@ the extension.
   practices for Firebase. See <https://firebase.google.com/support/privacy>.
 - **No analytics, advertising, error reporting, or telemetry SDKs** are
   bundled with Duet.
+- **No image services.** Emoji and avatar artwork ships inside the
+  extension, so pages you watch on make no requests to emoji or avatar
+  servers on Duet's behalf.
 
 ## Children
 

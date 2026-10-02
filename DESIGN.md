@@ -184,7 +184,7 @@ The tray reads as a slot the keys live in; pressing a key feels like it pops up 
 | `.btn-icon` (Sync)            | Lifted       | Peach-tinted cast, -1px hover travel               |
 | `.partner-mismatch button`    | Lifted (sm)  | Peach gradient, primary recipe at small scale      |
 | `.status` pill                | Lifted (sm)  | Neutral cast, no hover                             |
-| `.together` chip              | Lifted (sm)  | Rose-tinted cast                                   |
+| `.story` card ("Our story")   | Recessed     | Holds content; rose wash + glowing heart keep the old chip's rose echo |
 | `.drift` pill                 | Lifted (sm)  | Cast tinted by health state (success/peach/danger) |
 | `.room-card`                  | Lifted (lg)  | Neutral cast + faint top rim                       |
 | `.code-cells span`            | Carved       | Top inset, faint bottom rim, sunk into room-card   |

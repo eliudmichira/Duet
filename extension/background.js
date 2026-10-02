@@ -645,6 +645,64 @@ async function validateRules() {
   }
 }
 
+// ── Our story (local-only) ──────────────────────────────────
+// A small tally of time actually *watched* together — both playing the same
+// video — per partner, shown in the popup ("12h 30m watched together ·
+// 6 nights"). Lives in chrome.storage.local on this device only; nothing is
+// uploaded. Partners are keyed by display name (rooms and user ids are new
+// every session), so renaming starts a fresh tally.
+const STORY_KEY = "__duet_story";
+const STORY_TICK_MS = 15000;
+const STORY_MAX_PARTNERS = 20;
+const STORY_MAX_DAYS = 400;
+let storyLastTick = 0;
+
+function localDay(ts = Date.now()) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function storyPartnerKey(meta) {
+  const name = typeof meta?.name === "string" ? meta.name.trim().toLowerCase() : "";
+  return name || "__unnamed";
+}
+function watchingTogether() {
+  if (!currentRoom || lastPeerCount < 2 || !partnerMeta || !myLastTabInfo) return false;
+  if (partnerMeta.paused || myLastTabInfo.paused) return false;
+  if (!urlsMatch(myLastTabInfo.url, partnerMeta.url)) return false;
+  const partnerFresh = typeof partnerMeta.lastSeen === "number" && serverNow() - partnerMeta.lastSeen < 15000;
+  const mineFresh = Date.now() - lastTabInfoTime < 15000;
+  return partnerFresh && mineFresh;
+}
+async function storyTick() {
+  const now = Date.now();
+  if (!watchingTogether()) { storyLastTick = 0; return; }
+  if (!storyLastTick) { storyLastTick = now; return; }
+  // Cap the step so a suspended SW / sleeping laptop can't add phantom hours.
+  const add = Math.min(now - storyLastTick, STORY_TICK_MS * 2) / 1000;
+  storyLastTick = now;
+
+  const { [STORY_KEY]: stored } = await chrome.storage.local.get(STORY_KEY);
+  const story = stored && typeof stored === "object" && stored.partners ? stored : { v: 1, partners: {} };
+  const key = storyPartnerKey(partnerMeta);
+  const entry = story.partners[key] || { seconds: 0, days: {} };
+  entry.name = typeof partnerMeta.name === "string" ? partnerMeta.name.slice(0, 32) : "";
+  entry.seconds = (entry.seconds || 0) + add;
+  const day = localDay(now);
+  entry.days = entry.days || {};
+  entry.days[day] = (entry.days[day] || 0) + add;
+  const dayKeys = Object.keys(entry.days).sort();
+  for (const old of dayKeys.slice(0, Math.max(0, dayKeys.length - STORY_MAX_DAYS))) delete entry.days[old];
+  const title = partnerMeta.videoTitle || partnerMeta.pageTitle;
+  if (typeof title === "string" && title) entry.lastTitle = title.slice(0, 256);
+  entry.lastAt = now;
+  story.partners[key] = entry;
+  // Keep the most recent partners only.
+  const keys = Object.keys(story.partners).sort((a, b) => (story.partners[b].lastAt || 0) - (story.partners[a].lastAt || 0));
+  for (const k of keys.slice(STORY_MAX_PARTNERS)) delete story.partners[k];
+  await chrome.storage.local.set({ [STORY_KEY]: story });
+}
+setInterval(() => { storyTick().catch(() => {}); }, STORY_TICK_MS);
+
 // ── Connection quality (ping measurement) ─────────────────
 let lastPingMs = null;
 let lastPingAt = 0;

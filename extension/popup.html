@@ -646,27 +646,30 @@
 
     /* ── Together-time chip ────────────────────────── */
     /* Small embossed pill, rose-tinted cast shadow to echo its accent color */
-    .together {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-size: 10.5px; color: var(--rose);
-      background: linear-gradient(180deg, rgba(244,114,182,0.14) 0%, rgba(244,114,182,0.06) 100%);
-      border: 1px solid rgba(244,114,182,0.22);
-      padding: 5px 10px;
-      border-radius: 999px;
+    /* "Our story" card — Recessed container (it holds content) with a rose
+       wash; the heart keeps the old chip's rose echo. */
+    .story {
       margin-bottom: 12px;
-      letter-spacing: 0.01em;
-      font-weight: 500;
-      box-shadow:
-        0 3px 8px rgba(244,114,182,0.20),
-        inset 0 1px 0 rgba(255,255,255,0.18),
-        inset 0 -1px 2px rgba(0,0,0,0.14);
+      padding: 10px 12px 10px 11px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(244,114,182,0.20);
+      background: linear-gradient(180deg, rgba(244,114,182,0.09) 0%, rgba(0,0,0,0.18) 100%);
+      box-shadow: var(--recess);
     }
-    .together strong {
-      font-weight: 700;
-      font-family: 'JetBrains Mono', monospace;
-      color: var(--peach);
+    .story-row { display: flex; align-items: center; gap: 7px; }
+    .story-heart { color: var(--rose); flex-shrink: 0; filter: drop-shadow(0 0 6px rgba(244,114,182,0.55)); }
+    .story-title {
+      flex: 1; min-width: 0;
+      font-family: 'Instrument Serif', serif; font-style: italic; font-size: 16px; line-height: 1.1;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .together svg { color: var(--rose); }
+    .story-title span {
+      background: linear-gradient(110deg, var(--peach), var(--rose), var(--violet));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .story-session { flex-shrink: 0; font-size: 11px; color: var(--muted); }
+    .story-session strong { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--peach); }
+    .story-stats { margin-top: 5px; padding-left: 19px; font-size: 11.5px; color: rgba(244,241,234,0.78); }
 
     /* ── Partner now-playing card ──────────────────── */
     /* Container surface — recessed into the popup, not lifted */
@@ -1340,11 +1343,17 @@
           <span>Waiting for partner to join…</span>
         </div>
 
-        <div class="together" id="together-row" style="display:none">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-            <path d="M8 14s-5.5-3.5-5.5-7.5A3.5 3.5 0 0 1 8 4a3.5 3.5 0 0 1 5.5 2.5C13.5 10.5 8 14 8 14z" fill="currentColor"/>
-          </svg>
-          <span>Together for <strong id="together-text">0s</strong></span>
+        <!-- Our story: this session (live, from the room) + your history
+             with this partner (local-only tally, see background.js) -->
+        <div class="story" id="together-row" style="display:none">
+          <div class="story-row">
+            <svg class="story-heart" width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M8 14s-5.5-3.5-5.5-7.5A3.5 3.5 0 0 1 8 4a3.5 3.5 0 0 1 5.5 2.5C13.5 10.5 8 14 8 14z" fill="currentColor"/>
+            </svg>
+            <span class="story-title">You &amp; <span id="story-name">your partner</span></span>
+            <span class="story-session">this session <strong id="together-text">0s</strong></span>
+          </div>
+          <div class="story-stats" id="story-stats"></div>
         </div>
 
         <!-- Partner now-playing card -->
