@@ -181,27 +181,12 @@ const DuetAgent = (() => {
       return { adapter: null, video: null };
     }
 
-    // Try to use the adapter's findVideo
+    // Interpret the adapter as data — MV3 content scripts can't eval its code.
     try {
-      // The adapter is a self-contained module that exposes window.__duetAdapter
-      // We need to evaluate it in the current page context
-      const adapterCode = result.adapter.code;
-
-      // Check if already loaded
-      if (window.__duetAdapter?.id === result.adapter.id) {
-        const video = window.__duetAdapter.findVideo();
-        return { adapter: result.adapter, video };
-      }
-
-      // Inject the adapter
-      eval(adapterCode);
-
-      if (window.__duetAdapter) {
-        const video = window.__duetAdapter.findVideo();
-        return { adapter: result.adapter, video };
-      }
+      const video = AdapterRuntime.findVideo(result.adapter);
+      return { adapter: result.adapter, video };
     } catch (err) {
-      console.warn("[Duet Agent] Adapter injection failed:", err);
+      console.warn("[Duet Agent] Adapter runtime failed:", err);
     }
 
     return { adapter: result.adapter, video: null };

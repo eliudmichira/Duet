@@ -59,6 +59,9 @@ const AdapterGenerator = (() => {
       id: nextId(),
       hostname: analysis.hostname,
       framework: analysis.framework,
+      // Data AdapterRuntime interprets at runtime (MV3 can't eval `code`).
+      videoSelector: analysis.videoSelector || null,
+      customPlayerElement: analysis.domStructure?.customPlayerElement || null,
       code,
       confidence: analysis.confidence,
       strategy: strategy.name,

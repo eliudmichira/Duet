@@ -60,6 +60,7 @@ let togetherInfo = { since: null, total: 0 };  // co-watch timer state
 
 let primaryTabId = null;      // the single active video tab we are tracking
 let lastTabInfoTime = 0;      // when we last heard from the primary tab
+let primaryPaused = true;     // primary tab's last reported paused state
 
 // ── Diagnostics ─────────────────────────────────────────────
 // Surfaces silent failures (rule rejections, missing tab, etc.) to the popup
@@ -378,7 +379,7 @@ function attachListeners(roomCode) {
     const r = snap.val();
     if (!r || r.from === myUserId) return;
     // Drop reactions that arrived from before we joined
-    if (Date.now() - r.ts > 8000) return;
+    if (typeof r.ts !== "number" || serverNow() - r.ts > 8000) return;
     broadcastToVideoTabs({ type: "SHOW_REACTION", emoji: r.emoji });
   });
   reactionsListenerOff = () => reacts.off("child_added", reactsHandler);
@@ -470,12 +471,30 @@ async function pushSyncEvent(state, opts = {}) {
   }
 }
 
+// Shape a TAB_INFO payload to fit the RTDB `meta` rules exactly. One
+// over-long string (a 300-char page title, a tokenized 2KB URL) or an unknown
+// key rejects the *whole* write, silently freezing the partner card.
+const META_STRING_LIMITS = { url: 1024, hostname: 253, pageTitle: 256, videoTitle: 256, name: 32, emoji: 16 };
+function sanitizeMeta(info) {
+  const out = {};
+  for (const [key, max] of Object.entries(META_STRING_LIMITS)) {
+    if (typeof info[key] === "string") out[key] = info[key].slice(0, max);
+  }
+  for (const key of ["duration", "currentTime"]) {
+    const v = info[key];
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0 && v < 86400) out[key] = v;
+  }
+  if (typeof info.paused === "boolean") out.paused = info.paused;
+  return out;
+}
+
 async function pushTabInfo(info) {
   if (!metaRef) return;
   // Stamp our display name and emoji so the partner can label our actions.
   let named = { ...info };
   if (myName) named.name = myName;
   if (myEmoji) named.emoji = myEmoji;
+  named = sanitizeMeta(named);
   myLastTabInfo = { ...named, lastSeen: serverNow() };
   try {
     await metaRef.set({
@@ -492,7 +511,9 @@ async function pushReaction(emoji) {
   if (!reactionsRef || !myUserId) return;
   const ref = reactionsRef.push();
   try {
-    await ref.set({ emoji, from: myUserId, ts: Date.now() });
+    // Server timestamp, not Date.now(): receivers compare against their own
+    // serverNow(), so a skewed local clock can't make reactions look stale.
+    await ref.set({ emoji, from: myUserId, ts: firebase.database.ServerValue.TIMESTAMP });
     recordOk("pushReaction");
     // Survives SW death: server removes it ~6s later regardless of our lifetime.
     setTimeout(() => ref.remove().catch(() => {}), 6000);
@@ -506,7 +527,7 @@ async function pushReaction(emoji) {
 
 async function pruneStaleReactions() {
   if (!reactionsRef) return;
-  const cutoff = Date.now() - 10000;
+  const cutoff = serverNow() - 10000;
   const snap = await reactionsRef.once("value");
   if (!snap.exists()) return;
   const all = snap.val() || {};
@@ -831,7 +852,13 @@ function broadcastPartnerMeta() {
 // ── Open partner's URL ──────────────────────────────────────
 async function openPartnerVideo() {
   if (!partnerMeta?.url) return { error: "Partner hasn't shared a video yet." };
-  
+  // The URL comes from the room's shared DB node — only follow web links.
+  let partnerUrl;
+  try { partnerUrl = new URL(partnerMeta.url); } catch {}
+  if (!partnerUrl || !/^https?:$/.test(partnerUrl.protocol)) {
+    return { error: "Partner's link isn't a web page." };
+  }
+
   // Try to redirect the exact tab we've been tracking, fallback to active tab
   let targetTabId = primaryTabId;
   if (!targetTabId) {
@@ -840,9 +867,9 @@ async function openPartnerVideo() {
   }
 
   if (targetTabId) {
-    await chrome.tabs.update(targetTabId, { url: partnerMeta.url });
+    await chrome.tabs.update(targetTabId, { url: partnerUrl.href });
   } else {
-    await chrome.tabs.create({ url: partnerMeta.url });
+    await chrome.tabs.create({ url: partnerUrl.href });
   }
   return { ok: true };
 }
@@ -898,14 +925,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             // dedup is already implicit. Track which tab is the active video tab
             // so SYNC_TO_ME and OPEN_PARTNER_URL target the right place. Prefer
             // the tab whose video is currently playing; otherwise keep what we have.
-            const incomingPlaying = !message.info.paused;
-            const stale = (Date.now() - lastTabInfoTime) > 5000;
-            if (!primaryTabId || incomingPlaying || stale) {
-              primaryTabId = _sender.tab.id;
+            // Only the primary tab may publish meta — otherwise a paused
+            // background tab overwrites the playing one every second and the
+            // partner's card flips to "different video". A tab takes over when
+            // there's no primary, the primary went quiet, or it's playing
+            // while the primary is paused.
+            const senderTabId = _sender.tab.id;
+            const incomingPlaying = !message.info?.paused;
+            const primaryQuiet = (Date.now() - lastTabInfoTime) > 5000;
+            if (senderTabId !== primaryTabId &&
+                (!primaryTabId || primaryQuiet || (incomingPlaying && primaryPaused))) {
+              primaryTabId = senderTabId;
               diag.primaryTabId = primaryTabId;
             }
-            lastTabInfoTime = Date.now();
-            await pushTabInfo(message.info);
+            if (senderTabId === primaryTabId) {
+              lastTabInfoTime = Date.now();
+              primaryPaused = !incomingPlaying;
+              await pushTabInfo(message.info);
+            }
           }
           sendResponse({ ok: true });
           break;
@@ -977,14 +1014,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
 
         case "INJECT_AGENT_SCRIPTS": {
-          // Lazy-load agent modules into the requesting tab on demand.
-          // Avoids loading ~200KB of agent JS on every page.
-          const tabId = message.tabId;
-          if (!tabId) { sendResponse({ error: "No tabId" }); break; }
+          // Lazy-load agent modules into the requesting frame on demand, so
+          // the agent JS isn't loaded on every page. Target comes from the
+          // sender, never the message body. One frame only: the modules declare
+          // top-level consts, so re-injecting into a frame that already has
+          // them throws.
+          const tabId = _sender.tab?.id;
+          if (!tabId) { sendResponse({ error: "No sender tab" }); break; }
           try {
             await chrome.scripting.executeScript({
-              target: { tabId, allFrames: true },
+              target: { tabId, frameIds: [_sender.frameId ?? 0] },
               files: [
+                "agent/adapter-runtime.js",
                 "agent/site-analyzer.js",
                 "agent/adapter-generator.js",
                 "agent/adapter-registry.js",

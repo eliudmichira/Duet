@@ -105,9 +105,19 @@
     }
     return cps.join("-");
   }
+  // Every string that reaches innerHTML in the host page must pass through
+  // this: partner names, labels, and anything relayed via postMessage are
+  // attacker-controllable, and markup injected here runs in the page's origin.
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+    ));
+  }
+  // Escapes the input, then swaps emoji for Twemoji <img>s. Emoji never
+  // contain HTML metacharacters, so escaping first doesn't disturb matching.
   function twemojiHtml(text) {
-    if (!text || typeof text !== "string") return text;
-    return text.replace(/\p{Emoji_Presentation}|\p{Emoji}\uFE0F/gu, function(match) {
+    if (text == null) return "";
+    return escapeHtml(text).replace(/\p{Emoji_Presentation}|\p{Emoji}\uFE0F/gu, function(match) {
       const cp = twemojiCodePoints(match);
       // CSP-safe: use img tag with src attribute (no inline styles, no eval)
       return '<img class="twemoji" draggable="false" alt="' + match.replace(/"/g, '&quot;') + '" src="' + TWEMOJI_CDN + cp + '.svg" width="16" height="16" style="display:inline-block;width:1.1em;height:1.1em;vertical-align:-0.15em;">';
@@ -271,23 +281,23 @@
   let noVideoPolls = 0;
   const AGENT_FALLBACK_THRESHOLD = 3; // after 3 failed polls, try the agent
 
+  function agentLoaded() {
+    return typeof DuetAgent !== "undefined" && typeof AdapterRuntime !== "undefined";
+  }
+
   async function tryAgentFallback() {
     if (agentInitialized) return null;
     try {
       agentInitialized = true;
       dlog("[Duet Agent] Standard detection failed, lazy-loading agent modules...");
-      // Lazy-load agent scripts via background (avoids ~200KB on every page)
-      if (!window.DuetAgent) {
-        const tab = await new Promise((resolve) => {
-          try { chrome.tabs.getCurrent(resolve); } catch { resolve(null); }
-        });
-        if (tab?.id) {
-          await safeSend({ type: "INJECT_AGENT_SCRIPTS", tabId: tab.id });
-        }
+      // Lazy-load agent scripts via background. Content scripts can't call
+      // chrome.tabs, so the background targets this frame from the sender.
+      // The modules declare top-level consts, which are shared across this
+      // isolated world but are NOT properties of `window` — hence typeof.
+      if (!agentLoaded()) {
+        await safeSend({ type: "INJECT_AGENT_SCRIPTS" });
       }
-      // Wait briefly for scripts to initialize
-      await new Promise(r => setTimeout(r, 100));
-      if (!window.DuetAgent) {
+      if (!agentLoaded()) {
         dlog("[Duet Agent] Scripts not loaded after injection");
         return null;
       }
@@ -296,10 +306,8 @@
       if (result?.adapter) {
         agentAdapter = result.adapter;
         dlog(`[Duet Agent] Adapter loaded: ${result.adapter.id} (${result.adapter.strategy})`);
-        if (window.__duetAdapter) {
-          const v = window.__duetAdapter.findVideo();
-          if (v) return v;
-        }
+        const v = AdapterRuntime.findVideo(agentAdapter);
+        if (v) return v;
       }
     } catch (err) {
       dlog("[Duet Agent] Fallback failed:", err);
@@ -326,9 +334,9 @@
     noVideoPolls++;
 
     // If we already have an active agent adapter, use it
-    if (agentAdapter && window.__duetAdapter) {
+    if (agentAdapter && agentLoaded()) {
       try {
-        const v = window.__duetAdapter.findVideo();
+        const v = AdapterRuntime.findVideo(agentAdapter);
         if (v) return v;
       } catch {}
     }
@@ -540,6 +548,23 @@
     try { return window.top === window.self; } catch { return false; }
   })();
 
+  // ── Cross-frame message trust ──────────────────────────────
+  // window.postMessage is reachable by every frame on the page (ads included),
+  // and we can't tell our own content script in a cross-origin iframe apart
+  // from the page that iframe hosts. So: only accept messages from the frame
+  // tree we expect, and treat every payload as untrusted text regardless.
+  function fromDescendantFrame(e) {
+    try { return !!e.source && e.source !== window && e.source.top === window; } catch { return false; }
+  }
+  function fromTopFrame(e) {
+    try { return !!e.source && e.source === window.top; } catch { return false; }
+  }
+  function sanitizeFlash(data) {
+    const action = data.action === "play" ? "play" : "pause";
+    const customLabel = typeof data.customLabel === "string" ? data.customLabel.slice(0, 160) : null;
+    return { action, customLabel };
+  }
+
   // When running in a cross-origin iframe (yflix's embed, rapidshare, etc.),
   // location.href is a per-session tokenized URL that differs between viewers
   // even when they're on the same parent page. For partner-match purposes we
@@ -574,7 +599,7 @@
       } catch {}
     };
     window.addEventListener("message", (e) => {
-      if (e?.data?.__duet_msg === "request-page-url") {
+      if (e?.data?.__duet_msg === "request-page-url" && fromDescendantFrame(e)) {
         try { e.source?.postMessage({ __duet_msg: "page-url", url: location.href }, "*"); } catch {}
       }
     });
@@ -592,6 +617,7 @@
     window.addEventListener("message", (e) => {
       const data = e?.data;
       if (!data || data.__duet_msg !== "page-url" || typeof data.url !== "string") return;
+      if (!fromTopFrame(e) || !/^https?:\/\//i.test(data.url)) return;
       if (data.url !== topFrameUrl) {
         topFrameUrl = data.url;
         // Re-publish with the corrected URL right away so the partner card flips fast.
@@ -662,15 +688,16 @@
     // Top frame: listen for flashes from iframes; broadcast fullscreen state.
     window.addEventListener("message", (e) => {
       const data = e?.data;
-      if (!data) return;
+      if (!data || !fromDescendantFrame(e)) return;
       if (data.__duet_msg === "flash") {
+        const { action, customLabel } = sanitizeFlash(data);
         if (frameOwnsBadge) {
-          try { showFlash(data.action, data.customLabel); } catch {}
+          try { showFlash(action, customLabel); } catch {}
         } else {
           // Forward to whichever iframe currently owns (the fullscreen one).
           const fs = document.fullscreenElement || document.webkitFullscreenElement;
           if (fs && fs.tagName === "IFRAME") {
-            try { fs.contentWindow?.postMessage(data, "*"); } catch {}
+            try { fs.contentWindow?.postMessage({ __duet_msg: "flash", action, customLabel }, "*"); } catch {}
           }
         }
       }
@@ -704,7 +731,7 @@
     // Iframe: listen for ownership grants AND forwarded flashes from top.
     window.addEventListener("message", (e) => {
       const data = e?.data;
-      if (!data) return;
+      if (!data || !fromTopFrame(e)) return;
       if (data.__duet_msg === "badge-owner") {
         const next = !!data.value;
         if (next !== frameOwnsBadge) {
@@ -712,7 +739,8 @@
           applyBadgeOwnership();
         }
       } else if (data.__duet_msg === "flash" && frameOwnsBadge) {
-        try { showFlash(data.action, data.customLabel); } catch {}
+        const { action, customLabel } = sanitizeFlash(data);
+        try { showFlash(action, customLabel); } catch {}
       }
     });
   }
@@ -921,7 +949,7 @@
       
       controls.innerHTML = `
         <div style="height: 1px; background: rgba(255,255,255,0.1); width: 100%; margin-bottom: 2px;"></div>
-        <button id="__pp_sync_btn" aria-label="Sync partner to my current timestamp" style="background: rgba(255,255,255,0.1); border: none; color: white; border-radius: 6px; padding: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s; font-size: 11px;">${syncBtnDefaultLabel()}</button>
+        <button id="__pp_sync_btn" aria-label="Sync partner to my current timestamp" style="background: rgba(255,255,255,0.1); border: none; color: white; border-radius: 6px; padding: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s; font-size: 11px;">${escapeHtml(syncBtnDefaultLabel())}</button>
         <div style="display: flex; gap: 6px; align-items: center;">
           ${['😂', '💖', '🔥', '😭'].map(e => `<button class="__pp_re_btn" data-emoji="${e}" aria-label="Send ${e} reaction" style="background: rgba(255,255,255,0.05); border: none; border-radius: 6px; cursor: pointer; font-size: 15px; padding: 4px 6px; transition: background 0.2s; flex: 1;">${twemojiHtml(e)}</button>`).join('')}
           <button id="__pp_more_emojis" title="More emojis" aria-label="Open full emoji picker" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 700; padding: 4px 8px; color: rgba(244,241,234,0.7); flex-shrink: 0;">+</button>
@@ -1390,7 +1418,7 @@
     const accent = kind === "leave" ? "#ff6b7a" : "#5ee2a0";
     const dot = `<span style="width:8px;height:8px;border-radius:50%;background:${accent};box-shadow:0 0 8px ${accent};display:inline-block;"></span>`;
     const av = avatarHtml(S.partnerEmoji, 18);
-    toast.innerHTML = `${av ? `<span style="display:inline-flex;width:18px;height:18px;border-radius:50%;overflow:hidden;">${av}</span>` : dot}<span>${text}</span>`;
+    toast.innerHTML = `${av ? `<span style="display:inline-flex;width:18px;height:18px;border-radius:50%;overflow:hidden;">${av}</span>` : dot}<span>${escapeHtml(text)}</span>`;
     requestAnimationFrame(() => {
       toast.style.opacity = "1";
       toast.style.transform = "translateX(-50%) translateY(0)";
@@ -1556,7 +1584,7 @@
     // Tiny avatar inline with the sender label so attribution survives even
     // on bright frames where color contrast washes out.
     const avatarVal = fromSelf ? myEmoji : S.partnerEmoji;
-    senderEl.innerHTML = `${avatarHtml(avatarVal, 14) || ""}<span>${who}</span>`;
+    senderEl.innerHTML = `${avatarHtml(avatarVal, 14) || ""}<span>${escapeHtml(who)}</span>`;
 
     const textEl = document.createElement("span");
     textEl.textContent = trimmed;

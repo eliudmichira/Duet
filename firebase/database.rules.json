@@ -60,6 +60,14 @@
           "$other": { ".validate": false }
         },
 
+        "typing": {
+          "$userId": { ".validate": "$userId.length <= 32 && newData.isBoolean()" }
+        },
+
+        "ping": {
+          "$userId": { ".validate": "$userId.length <= 32 && newData.isNumber()" }
+        },
+
         "host":      { ".validate": "newData.isString() && newData.val().length <= 32" },
         "created":   { ".validate": "newData.isNumber()" },
         "lastTouch": { ".validate": "newData.isNumber()" },

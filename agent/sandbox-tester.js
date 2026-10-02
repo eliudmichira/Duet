@@ -255,12 +255,18 @@ const SandboxTester = (() => {
     const errors = [];
     const warnings = [];
 
-    // Syntax check
+    // Syntax check. Inside an MV3 content script the extension CSP blocks
+    // new Function() outright (EvalError) — that says nothing about the code,
+    // so skip the check there rather than failing every adapter.
     try {
       new Function(code);
     } catch (err) {
-      errors.push(`Syntax: ${err.message}`);
-      return { ok: false, errors, warnings };
+      if (err instanceof EvalError) {
+        warnings.push("Syntax check skipped (eval blocked by CSP)");
+      } else {
+        errors.push(`Syntax: ${err.message}`);
+        return { ok: false, errors, warnings };
+      }
     }
 
     // Check for required exports
