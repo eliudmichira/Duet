@@ -32,3 +32,4 @@ _[Checkpoint: 69f10d1f — edited extension\popup.js; edited extension\popup.js;
 _[Checkpoint: 6abf060a — Restored custom Duet UI design and visual polish, validated all scripts and manifest]_
 ---
 
+[02:40:58] NOTE: Branch claude/focused-thompson-m4repr has 3 commits (c958f16, 733353c, 1d451ef) fixing: HTML injection, disconnect cleanup, startup wedge, lazy Firebase connection, cleanup function cursor pagination, room code collision, multi-tab meta fight. All JS files pass syntax checks. database.rules.json literal-newline-in-string issue is pre-existing (Firebase RTDB parser accepts it). Ready to merge to master.
