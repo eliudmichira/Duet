@@ -125,7 +125,7 @@
     .wrap {
       position: relative;
       z-index: 1;
-      padding: 22px 22px 20px;
+      padding: 18px 22px 16px;
     }
 
     /* ── Header ─────────────────────────────────────── */
@@ -133,7 +133,7 @@
       display: flex;
       align-items: center;
       gap: 11px;
-      margin-bottom: 22px;
+      margin-bottom: 16px;
     }
 
     /* Logo — full-spectrum conic ring with a tri-color pulsing halo */
@@ -238,7 +238,7 @@
       font-weight: 600;
       letter-spacing: 0.04em;
       color: var(--muted);
-      margin-bottom: 20px;
+      margin-bottom: 14px;
       transition: all 0.3s;
       box-shadow: var(--lift-small), var(--emboss-rim-soft), var(--emboss-base-soft);
     }
@@ -419,7 +419,7 @@
     /* ── Disconnected: hero ─────────────────────────── */
     .hero {
       text-align: center;
-      margin-bottom: 22px;
+      margin-bottom: 16px;
     }
     .hero h1 {
       font-family: 'Instrument Serif', serif;
@@ -427,7 +427,7 @@
       font-size: 30px;
       line-height: 1.05;
       letter-spacing: -0.02em;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     .hero h1 em {
       font-style: italic;
@@ -513,18 +513,48 @@
         inset 0 -1px 2px rgba(0,0,0,0.14);
     }
 
+    /* Ghost tier (DESIGN.md): no lift, no border — destructive actions stay
+       quieter than everything raised. Danger colour appears only on hover. */
     .btn-ghost {
       background: transparent;
-      border: 1px solid rgba(255,107,122,0.25);
-      color: var(--danger);
-      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px;
+      margin-top: 8px;
     }
-    .btn-ghost:hover { background: rgba(255,107,122,0.08); border-color: rgba(255,107,122,0.45); }
+    .btn-ghost:hover { color: var(--danger); background: rgba(255,107,122,0.06); }
+
+    [hidden] { display: none !important; }
+
+    /* "Having trouble?" — diagnostics live behind a text link. */
+    .trouble-link {
+      display: block;
+      margin: 2px auto 0;
+      background: none; border: none; cursor: pointer;
+      font: inherit; font-size: 11px; font-weight: 500;
+      color: var(--muted-2);
+      padding: 4px 8px;
+      transition: color .2s;
+    }
+    .trouble-link:hover { color: var(--text); }
+    .trouble-link.warn { color: var(--peach); }
+    .trouble-link.err  { color: var(--danger); }
+    .trouble-link .chev { display: inline-block; transition: transform .2s; }
+    .trouble-link[aria-expanded="true"] .chev { transform: rotate(90deg); }
+    #trouble .diag { margin-top: 6px; }
+
+    .invite-hint {
+      margin-top: 10px;
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted-2);
+    }
 
     /* ── Divider ────────────────────────────────────── */
     .divider {
       display: flex; align-items: center; gap: 12px;
-      margin: 14px 0 12px;
+      margin: 12px 0 10px;
       color: var(--muted-2);
       font-size: 10px;
       font-weight: 600;
@@ -598,8 +628,8 @@
 
     /* ── Footer ─────────────────────────────────────── */
     .footer {
-      margin-top: 18px;
-      padding-top: 14px;
+      margin-top: 14px;
+      padding-top: 10px;
       border-top: 1px solid var(--border);
       text-align: center;
       font-family: 'Instrument Serif', serif;
@@ -1114,7 +1144,7 @@
     .quick-avatars {
       display: flex;
       gap: 6px;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       flex-wrap: wrap;
     }
     .quick-avatar {
@@ -1286,7 +1316,7 @@
         </div>
         <div>
           <div class="logo-text">Du<em>et</em></div>
-          <div class="logo-tag">Watch in duet · two screens, one beat</div>
+          <div class="logo-tag">Two screens, one beat</div>
         </div>
       </div>
 
@@ -1298,7 +1328,7 @@
 
       <!-- Connected View -->
       <div id="view-connected" style="display:none">
-        <div class="room-card">
+        <div class="room-card" id="room-card">
           <div class="room-label">Your room code</div>
           <div class="code-cells" id="room-code-display"></div>
           <button class="copy-btn" id="copy-link-btn">Copy invite link</button>
@@ -1361,8 +1391,13 @@
 
         <button class="btn btn-ghost" id="leave-btn">Leave room</button>
 
-        <!-- Diagnostics ─────────────────────────────────────── -->
-        <details class="diag" id="diag-panel">
+        <button class="trouble-link" id="trouble-link" type="button" aria-expanded="false" aria-controls="trouble">
+          <span id="trouble-text">Having trouble?</span> <span class="chev">›</span>
+        </button>
+
+        <!-- Diagnostics — hidden until asked for (or something's wrong) -->
+        <div id="trouble" hidden>
+        <details class="diag" id="diag-panel" open>
           <summary>
             <span class="diag-pill" id="diag-pill"></span>
             <span class="diag-label" id="diag-label">Diagnostics</span>
@@ -1383,6 +1418,7 @@
           <summary style="cursor: pointer; font-size: 11px; font-weight: 600; color: rgba(244,241,234,0.7); padding: 4px 0;">Sync Event Timeline</summary>
           <div id="sync-timeline" style="max-height: 120px; overflow-y: auto; font-size: 10px; font-family: monospace; color: rgba(244,241,234,0.6); padding: 4px 0; scrollbar-width: thin;"></div>
         </details>
+        </div>
       </div>
 
       <!-- Emoji Picker Drawer + dismiss backdrop -->
@@ -1404,7 +1440,7 @@
       <div id="view-disconnected">
         <div class="hero">
           <h1>Watch <em>together</em>,<br/>even apart.</h1>
-          <p>Spin up a room and share the code. Pause, play, and seek stay in lockstep across both screens.</p>
+          <p>Send one link. Play, pause and seek stay in lockstep on both screens.</p>
         </div>
 
         <!-- Quick-pick illustrated avatars — populated by JS so the URLs stay
@@ -1429,9 +1465,7 @@
 
         <div class="msg" id="main-msg"></div>
 
-        <div style="margin-top: 16px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 10.5px; line-height: 1.5; color: var(--muted-2); text-align: center;">
-          Sync runs on a hosted backend. Rooms auto-expire after inactivity.
-        </div>
+        <p class="invite-hint">Got an invite link? Just open it — no code needed.</p>
       </div>
 
       <div class="footer">made for the <span>two of you</span></div>

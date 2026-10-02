@@ -194,13 +194,31 @@ The tray reads as a slot the keys live in; pressing a key feels like it pops up 
 | `.reactions` tray             | Recessed     | Slot                                               |
 | `.reactions button`           | Lifted-on-hover | Key-press pattern; flat at rest                 |
 | `.code-input`, `.chat-input`  | Recessed     | Holes you type into                                |
+| `#leave-btn` (`.btn-ghost`)   | Ghost        | Muted text, danger colour only on hover            |
+| `.trouble-link`               | Flat         | Text link; diagnostics live behind it              |
+
+### In-page badge (content script, closed Shadow DOM)
+
+Same tokens, scoped to a shadow root so the host page can't restyle it.
+
+| Element                       | State        | Notes                                              |
+| ----------------------------- | ------------ | -------------------------------------------------- |
+| `.badge`                      | Lifted (lg)  | Cast shadow echoes sync health (`data-health`: good / warn / bad / idle) |
+| `.btn-primary` (Catch up)     | Lifted (sm)  | The badge's one raised action; -1px travel         |
+| `.tray` + `.key` (reactions)  | Recessed tray, keys lift on hover | Canonical grid-of-buttons pattern |
+| `.chat input`                 | Recessed     | Hole you type into                                 |
+| `.drawer` (emoji picker)      | Lifted (lg)  | Pops above the badge; tabs are pills, grid is a tray |
+| `.puck` (minimized)           | Lifted (sm)  | Same health echo as the badge                      |
+| `.flash`, `.toast`            | Lifted       | Accent-tinted cast: play green, pause peach, leave red |
+| `.icon-key` (minimize)        | Flat → lifts on hover | Small object, -1px travel                  |
 
 ## Hierarchy rule of thumb
 
 > The number of elements that look "raised" on screen at once should equal the number of distinct actions the user is being offered.
 
 - **Disconnected view**: 2 raised buttons (Create, Join). Correct — two paths to the same goal.
-- **Connected view**: 1 raised primary action (Sync partner to me), with raised *small* indicators (status pill, together chip, drift pill). Copy, Leave, reactions, and all containers stay flat or recessed.
+- **Connected view**: 1 raised primary action (Catch up), with raised *small* indicators (status pill, together chip, drift pill). Copy, Leave, reactions, and all containers stay flat or recessed. Once the partner joins, the room-code card collapses — the code has done its job.
+- **In-page badge**: 1 raised action (Catch up). Everything else is a recessed tray/input or a flat key until hovered.
 
 If you find yourself raising a fourth or fifth button, you don't have a design problem — you have an information-architecture problem. Cut something or demote it to recessed/flat.
 

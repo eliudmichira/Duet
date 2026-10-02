@@ -93,9 +93,6 @@
   ];
   // ── Twemoji: replace Unicode emoji with Twitter SVG images ──
   const TWEMOJI_CDN = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/";
-  // Regex matches emoji: BMP emoticons, supplemental symbols, modifier bases,
-  // flags, ZWJ sequences. Covers ~99% of common emoji.
-  const __EMOJI_RE = /(?:\u200d\ufe0f?|[\ufe0e\ufe0f])?|(?:\ud83c[\udde6-\uddff]){2}|\ud83c[\uddfa\uddf8]|\ud83d[\udc68\udc69\udc41\udc6b\udc6c\udc6d\udc6e\udc6f\udc70\udc71\udc72\udc73\udc74\udc75\udc76\udc77\udc78\udc7f\udc80\udc81\udc82\udc83\udc84\udc85\udc86\udc87\udc88\udc89\udc8a\udc8b\udc8c\udc8d\udc8e\udc8f\udc90\udc91\udc92\udc93\udc94\udc95\udc96\udc97\udc98\udc99\udc9a\udc9b\udc9c\udc9d\udc9e\udc9f\udca0\udca1\udca2\udca3\udca4\udca5\udca6\udca7\udca8\udca9\udcaa\udcab\udcac\udcad\udcae\udcaf\udcb0\udcb1\udcb2\udcb3\udcb4\udcb5\udcb6\udcb7\udcb8\udcb9\udcba\udcbb\udcbc\udcbd\udcbe\udcbf\udcc0\udcc1\udcc2\udcc3\udcc4\udcc5\udcc6\udcc7\udcc8\udcc9\udcca\udccb\udccc\udccd\udcce\udccf\udcd0\udcd1\udcd2\udcd3\udcd4\udcd5\udcd6\udcd7\udcd8\udcd9\udcda\udcdb\udcdc\udcdd\udcde\udcdf\udce0\udce1\udce2\udce3\udce4\udce5\udce6\udce7\udce8\udce9\udcea\udceb\udcec\udced\udcee\udcef\udcf0\udcf1\udcf2\udcf3\udcf4\udcf5\udcf6\udcf7\udcf8\udcf9\udcfa\udcfb\udcfc\udcfd\udcfe\udcff|\ud83d[\ude00-\ude4f]|\ud83d[\ude80-\udeff]|\ud83e[\udd00-\uddef\uddf0-\uddff]|\u2702-\u27b0]|\u24c2\ud83c[\udc04\udccf\udde6-\uddff\ude02-\ude0a\ude10-\ude12\ude15-\ude2c\ude2e-\ude35\ude37-\ude3a\ude50-\ude51\udf00-\udfff]|\u2600-\u26ff|\u2700-\u27bf|\ufe0f|\u200d|\u2934-\u2935|\u25aa-\u25ab|\u25b6|\u25c0|\u25fb-\u25fe|\u2b05-\u2b07|\u2b1b-\u2b1c|\u2b50|\u2b55|\u3030|\u303d|\u3297|\u3299|\ud83c[\udc00-\udfff]/g;
   function twemojiCodePoints(str) {
     const cps = [];
     for (let i = 0; i < str.length; i++) {
@@ -120,40 +117,8 @@
     return escapeHtml(text).replace(/\p{Emoji_Presentation}|\p{Emoji}\uFE0F/gu, function(match) {
       const cp = twemojiCodePoints(match);
       // CSP-safe: use img tag with src attribute (no inline styles, no eval)
-      return '<img class="twemoji" draggable="false" alt="' + match.replace(/"/g, '&quot;') + '" src="' + TWEMOJI_CDN + cp + '.svg" width="16" height="16" style="display:inline-block;width:1.1em;height:1.1em;vertical-align:-0.15em;">';
+      return '<img class="twemoji" draggable="false" alt="' + match.replace(/"/g, '&quot;') + '" src="' + TWEMOJI_CDN + cp + '.svg" width="16" height="16">';
     });
-  }
-  // DOM-safe version for non-innerHTML contexts
-  function twemojiReplace(parentEl) {
-    if (!parentEl) return;
-    const walker = document.createTreeWalker(parentEl, NodeFilter.SHOW_TEXT);
-    const textNodes = [];
-    while (walker.nextNode()) textNodes.push(walker.currentNode);
-    for (const node of textNodes) {
-      const text = node.textContent;
-      if (!text || !/\p{Emoji_Presentation}|\p{Emoji}\uFE0F/u.test(text)) continue;
-      const frag = document.createDocumentFragment();
-      let lastIdx = 0;
-      const re = /\p{Emoji_Presentation}|\p{Emoji}\uFE0F/gu;
-      let m;
-      while ((m = re.exec(text)) !== null) {
-        if (m.index > lastIdx) frag.appendChild(document.createTextNode(text.slice(lastIdx, m.index)));
-        const img = document.createElement("img");
-        img.className = "twemoji";
-        img.alt = m[0];
-        img.draggable = false;
-        img.width = 16; img.height = 16;
-        img.style.cssText = "display:inline-block;width:1.1em;height:1.1em;vertical-align:-0.15em;";
-        img.src = TWEMOJI_CDN + twemojiCodePoints(m[0]) + ".svg";
-        frag.appendChild(img);
-        lastIdx = re.lastIndex;
-      }
-      if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.slice(lastIdx)));
-      node.parentNode.replaceChild(frag, node);
-    }
-  }
-  function isEmojiOnly(str) {
-    return typeof str === "string" && /^\s*(?:\p{Emoji_Presentation}|\p{Emoji}\uFE0F|\s)+\s*$/u.test(str);
   }
 
   function isAvatarCode(v) { return typeof v === "string" && /^av:\d{2}$/.test(v); }
@@ -196,7 +161,7 @@
     } catch {}
   }
   function refreshSyncBtnLabel() {
-    const btn = document.getElementById("__pp_sync_btn");
+    const btn = $ui("__pp_sync_btn");
     if (!btn || btn.disabled) return; // don't clobber transient states
     btn.textContent = syncBtnDefaultLabel();
   }
@@ -263,9 +228,8 @@
   function teardown() {
     try { observer?.disconnect(); } catch {}
     if (tabInfoTimer) { clearInterval(tabInfoTimer); tabInfoTimer = null; }
-    // Hide the badge — extension is gone, anything it claims is stale
-    const badge = document.getElementById("__duet_badge");
-    if (badge) badge.style.opacity = "0";
+    // Hide the UI — extension is gone, anything it claims is stale
+    if (uiHost) uiHost.remove();
   }
 
   // ── Video Detection ────────────────────────────────────────
@@ -419,8 +383,10 @@
         childList: true, subtree: true, attributes: true,
         attributeFilter: ["src", "style", "class"]
       });
-      // Initial check + light polling fallback (10s) for edge cases
-      check();
+      // Initial check (deferred one tick: attaching to a video renders the
+      // badge, which reads state declared further down this file) + light
+      // polling fallback (10s) for edge cases.
+      setTimeout(check, 0);
       setInterval(() => { if (extAlive()) check(); }, 10000);
     } catch {
       // MutationObserver failed — fall back to polling
@@ -515,7 +481,11 @@
       video.pause();
     }
 
-    showFlash(state.action, state.force ? `${S.partnerName || "Partner"} re-synced you` : null);
+    // A catch-up the user asked for is "you → partner", not something the
+    // partner did to you.
+    const who = S.partnerName || "Partner";
+    showFlash(state.action, state.catchUp ? `Caught up to ${who}`
+      : state.force ? `${who} re-synced you` : null);
 
     expectedRemoteEvents = expected;
     if (expected.size === 0) {
@@ -675,7 +645,7 @@
   let frameOwnsBadge = isTopFrame;
 
   function applyBadgeOwnership() {
-    const overlay = document.getElementById("__duet_overlay");
+    const overlay = $ui("__duet_overlay");
     if (frameOwnsBadge) {
       if (overlay) overlay.style.display = "flex";
       // Force a re-render so the badge picks up any state changes that
@@ -747,46 +717,450 @@
     });
   }
 
+  // ── UI root (Shadow DOM) ───────────────────────────────────
+  // Everything Duet draws on a page lives in one closed shadow root:
+  //  - page CSS can't restyle or break it (and vice versa),
+  //  - page scripts can't reach in and read the chat,
+  //  - toasts, bubbles and the badge share one host, so re-parenting that
+  //    host into a fullscreen element brings all of them along.
+  // Visual language follows DESIGN.md ("soft-embossed pill"): the badge is a
+  // Lifted card whose cast shadow is tinted by sync health, Catch-up is the
+  // one Lifted primary, reactions are keys in a Recessed tray, the chat box
+  // is a Recessed input.
+  const DUET_UI_CSS = `
+    :host { all: initial; }
+    *, *::before, *::after { box-sizing: border-box; }
+
+    .layer {
+      --text: #f4f1ea;
+      --muted: rgba(244,241,234,0.58);
+      --border: rgba(255,255,255,0.09);
+      --border-strong: rgba(255,255,255,0.16);
+      --peach: #ffc89a; --coral: #ff8a6b; --rose: #f472b6; --violet: #8b5cf6;
+      --success: #5ee2a0; --warn: #fcd34d; --danger: #ff6b7a;
+      --emboss-rim:        inset 0 1px 0 rgba(255,255,255,0.45);
+      --emboss-rim-soft:   inset 0 1px 0 rgba(255,255,255,0.10);
+      --emboss-rim-faint:  inset 0 1px 0 rgba(255,255,255,0.06);
+      --emboss-base:       inset 0 -2px 4px rgba(0,0,0,0.18);
+      --emboss-base-soft:  inset 0 -1px 2px rgba(0,0,0,0.12);
+      --lift-small:        0 3px 8px rgba(0,0,0,0.30);
+      --lift-small-hi:     0 6px 14px rgba(0,0,0,0.40);
+      --recess:            inset 0 1px 2px rgba(0,0,0,0.35), inset 0 -1px 0 rgba(255,255,255,0.04);
+      --surface: linear-gradient(180deg, rgba(32,29,44,0.95) 0%, rgba(18,16,26,0.96) 50%, rgba(11,10,16,0.97) 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+      color: var(--text);
+      font-size: 12px; line-height: 1.3; font-weight: 600; letter-spacing: 0.005em;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; color: inherit; margin: 0; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible {
+      outline: 2px solid rgba(139,92,246,0.7); outline-offset: 2px;
+    }
+    img.twemoji { display: inline-block; width: 1.1em; height: 1.1em; vertical-align: -0.15em; }
+
+    /* ── Stack anchored bottom-right (flash above badge) ── */
+    .overlay {
+      position: fixed; bottom: 22px; right: 22px;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+      pointer-events: none;
+    }
+
+    /* ── Badge: Lifted card, cast shadow echoes sync health ── */
+    .badge {
+      --cast: 0 10px 28px rgba(0,0,0,0.45);
+      position: relative;
+      display: flex; flex-direction: column;
+      width: 264px;
+      pointer-events: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      backdrop-filter: blur(16px) saturate(1.4);
+      -webkit-backdrop-filter: blur(16px) saturate(1.4);
+      box-shadow: var(--cast), var(--emboss-rim-soft), var(--emboss-base);
+      opacity: 0; transform: translateY(6px);
+      transition: opacity .35s ease, transform .35s ease, box-shadow .45s ease;
+    }
+    .badge.is-visible { opacity: 1; transform: none; }
+    .badge[data-health="good"] { --cast: 0 10px 28px rgba(0,0,0,0.40), 0 6px 22px rgba(94,226,160,0.22); }
+    .badge[data-health="warn"] { --cast: 0 10px 28px rgba(0,0,0,0.40), 0 6px 22px rgba(255,200,154,0.28); }
+    .badge[data-health="bad"]  { --cast: 0 10px 28px rgba(0,0,0,0.40), 0 6px 22px rgba(255,107,122,0.30); }
+
+    .topbar {
+      display: flex; align-items: center; gap: 7px;
+      padding: 9px 10px 9px 12px;
+      cursor: grab; touch-action: none; user-select: none;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+      background: var(--peach);
+      box-shadow: 0 0 8px var(--peach), 0 0 0 3px rgba(255,200,154,0.12);
+      transition: background .3s, box-shadow .3s;
+    }
+    [data-health="good"] .dot { background: var(--success); box-shadow: 0 0 8px var(--success), 0 0 0 3px rgba(94,226,160,0.12); }
+    [data-health="warn"] .dot { background: var(--warn);    box-shadow: 0 0 8px var(--warn),    0 0 0 3px rgba(252,211,77,0.12); }
+    [data-health="bad"]  .dot { background: var(--danger);  box-shadow: 0 0 8px var(--danger),  0 0 0 3px rgba(255,107,122,0.14); }
+    .brand {
+      font-weight: 700;
+      background: linear-gradient(110deg, var(--peach), var(--rose), var(--violet));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .sep { color: var(--muted); font-weight: 500; }
+    .status-emoji { font-size: 13px; line-height: 1; }
+    .status-text {
+      flex: 1; min-width: 0;
+      color: rgba(244,241,234,0.88);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ping { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .ping[data-q="good"] { color: var(--success); }
+    .ping[data-q="ok"]   { color: var(--warn); }
+    .ping[data-q="bad"]  { color: var(--danger); }
+
+    /* Small round key — flat at rest, lifts on hover (DESIGN.md small travel). */
+    .icon-key {
+      width: 22px; height: 22px; flex-shrink: 0;
+      display: grid; place-items: center; padding: 0;
+      border: 1px solid transparent; border-radius: 50%;
+      background: rgba(255,255,255,0.05);
+      color: var(--muted); font-size: 15px; line-height: 1;
+      transition: transform .15s ease, box-shadow .25s ease, background .2s, color .2s;
+    }
+    .icon-key:hover {
+      color: var(--text);
+      background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.05));
+      box-shadow: var(--lift-small), var(--emboss-rim-soft);
+      transform: translateY(-1px);
+    }
+    .icon-key:active { transform: none; box-shadow: var(--recess); }
+
+    .controls {
+      display: none; flex-direction: column; gap: 8px;
+      padding: 10px 12px 12px;
+      border-top: 1px solid var(--border);
+    }
+    .badge.is-open .controls { display: flex; }
+
+    /* The one Lifted primary in the badge. Small object → -1px travel. */
+    .btn-primary {
+      width: 100%; border: none; border-radius: 999px;
+      padding: 8px 12px;
+      font-weight: 700; font-size: 12px; color: #14111c;
+      background: linear-gradient(180deg, var(--peach) 0%, var(--coral) 50%, var(--rose) 100%);
+      box-shadow: 0 4px 12px rgba(255,138,107,0.35), var(--emboss-rim), var(--emboss-base);
+      transition: transform .15s ease, box-shadow .25s ease, opacity .2s;
+    }
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 7px 16px rgba(255,138,107,0.45), inset 0 1px 0 rgba(255,255,255,0.55), var(--emboss-base);
+    }
+    .btn-primary:active:not(:disabled) {
+      transform: none;
+      box-shadow: 0 2px 6px rgba(255,138,107,0.30), var(--emboss-rim-soft), var(--emboss-base-soft);
+    }
+    .btn-primary:disabled { opacity: .75; cursor: default; }
+
+    /* Ghost: no lift — quieter than everything raised. */
+    .btn-ghost {
+      width: 100%; border: none; background: none; padding: 3px;
+      color: var(--muted); font-weight: 600; font-size: 11.5px;
+      transition: color .2s;
+    }
+    .btn-ghost:hover { color: var(--text); }
+
+    /* Recessed tray, embossed keys (DESIGN.md "grid-of-buttons"). */
+    .tray {
+      display: flex; gap: 3px; padding: 3px;
+      border-radius: 10px;
+      background: rgba(0,0,0,0.28);
+      box-shadow: var(--recess);
+    }
+    .key {
+      flex: 1; height: 30px; padding: 0;
+      display: grid; place-items: center;
+      border: 1px solid transparent; border-radius: 8px;
+      background: transparent;
+      font-size: 16px; line-height: 1;
+      transition: transform .15s ease, box-shadow .25s ease, background .2s;
+    }
+    .key:hover {
+      background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 100%);
+      border-color: var(--border);
+      box-shadow: var(--lift-small), var(--emboss-rim-soft), var(--emboss-base-soft);
+      transform: translateY(-1px) scale(1.06);
+    }
+    .key:active { transform: none; background: rgba(0,0,0,0.25); box-shadow: var(--recess); }
+    .key.more { flex: 0 0 32px; color: var(--muted); font-size: 15px; font-weight: 700; }
+    .key.more[aria-expanded="true"] { color: var(--text); background: rgba(0,0,0,0.25); box-shadow: var(--recess); }
+
+    /* Recessed input. */
+    .chat { position: relative; }
+    .chat input {
+      display: block; width: 100%;
+      padding: 8px 28px 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.30);
+      box-shadow: var(--recess);
+      color: var(--text); font-size: 12px; font-weight: 500;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .chat input::placeholder { color: rgba(244,241,234,0.42); }
+    .chat input:focus { border-color: rgba(244,114,182,0.55); }
+    .chat input.sent { border-color: rgba(94,226,160,0.7); }
+    .chat .hint {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      font-size: 11px; color: rgba(244,241,234,0.4); pointer-events: none;
+    }
+
+    /* Emoji drawer: Lifted card popping above the badge. */
+    .drawer {
+      display: none; flex-direction: column; gap: 8px;
+      position: absolute; bottom: calc(100% + 8px); right: 0;
+      width: 300px; padding: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      backdrop-filter: blur(16px) saturate(1.4);
+      -webkit-backdrop-filter: blur(16px) saturate(1.4);
+      box-shadow: 0 14px 30px rgba(0,0,0,0.50), var(--emboss-rim-soft), var(--emboss-base);
+    }
+    .drawer.is-open { display: flex; }
+    .tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab {
+      flex-shrink: 0; white-space: nowrap;
+      padding: 4px 10px; border-radius: 999px;
+      border: 1px solid transparent; background: transparent;
+      color: var(--muted); font-size: 11px; font-weight: 600;
+      transition: color .2s, background .2s, box-shadow .25s;
+    }
+    .tab:hover { color: var(--text); }
+    .tab[aria-selected="true"] {
+      color: var(--text);
+      background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.05));
+      border-color: var(--border);
+      box-shadow: var(--lift-small), var(--emboss-rim-soft);
+    }
+    .grid {
+      display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px;
+      max-height: 148px; overflow-y: auto; scrollbar-width: thin;
+    }
+    .grid .key { height: 34px; font-size: 18px; }
+    .grid .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: 11px; padding: 12px 0; }
+
+    /* Minimized puck: small Lifted pill, same health echo. */
+    .puck {
+      --cast: var(--lift-small);
+      display: none; align-items: center; gap: 7px;
+      padding: 7px 12px 7px 10px;
+      pointer-events: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 13px;
+      cursor: grab; touch-action: none; user-select: none;
+      box-shadow: var(--cast), var(--emboss-rim-soft), var(--emboss-base-soft);
+      transition: transform .15s ease, box-shadow .25s ease;
+    }
+    .puck.is-visible { display: inline-flex; }
+    .puck:hover { transform: translateY(-1px); }
+    .puck[data-health="good"] { --cast: 0 4px 14px rgba(94,226,160,0.25); }
+    .puck[data-health="warn"] { --cast: 0 4px 14px rgba(255,200,154,0.30); }
+    .puck[data-health="bad"]  { --cast: 0 4px 14px rgba(255,107,122,0.32); }
+
+    /* Flash: Lifted card, accent-echo by action. */
+    .flash {
+      --accent: var(--success);
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      font-size: 13px;
+      pointer-events: none;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.50), 0 4px 18px color-mix(in srgb, var(--accent) 22%, transparent),
+                  var(--emboss-rim-soft), var(--emboss-base);
+      opacity: 0; transform: translateY(10px) scale(0.96);
+      transition: opacity .4s ease, transform .4s ease;
+    }
+    .flash.is-visible { opacity: 1; transform: none; }
+    .flash[data-action="pause"] { --accent: var(--peach); }
+    .flash-icon {
+      width: 24px; height: 24px; flex-shrink: 0;
+      display: grid; place-items: center; overflow: hidden;
+      border-radius: 50%;
+      color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+    }
+
+    /* Toasts: Lifted pills centered at the top. */
+    .toast {
+      --accent: var(--success);
+      position: fixed; left: 50%; top: 60px;
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12.5px; font-weight: 700; white-space: nowrap;
+      pointer-events: none;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.50), 0 4px 16px color-mix(in srgb, var(--accent) 22%, transparent),
+                  var(--emboss-rim-soft), var(--emboss-base-soft);
+      opacity: 0; transform: translateX(-50%) translateY(-12px);
+      transition: opacity .3s ease, transform .3s ease;
+    }
+    .toast.is-visible { opacity: 1; transform: translateX(-50%); }
+    .toast[data-kind="leave"] { --accent: var(--danger); }
+    .toast[data-kind="system"] { --accent: var(--peach); top: 22px; font-weight: 600; }
+    .toast .toast-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent); box-shadow: 0 0 8px var(--accent);
+    }
+    .toast .toast-av { display: inline-flex; width: 18px; height: 18px; border-radius: 50%; overflow: hidden; }
+
+    /* Floating emoji + subtitle-style chat (content, not chrome). */
+    .float-emoji {
+      position: fixed; bottom: 80px; font-size: 48px; pointer-events: none;
+      filter: drop-shadow(0 4px 14px rgba(0,0,0,0.45));
+      opacity: 0;
+      animation: duet-float 2.6s cubic-bezier(.2,.7,.3,1) forwards;
+    }
+    .bubble {
+      position: fixed; max-width: 70vw; pointer-events: none;
+      will-change: transform;
+    }
+    .bubble.ltr { left: -100%; animation-name: duet-slide-ltr; }
+    .bubble.rtl { right: -100%; animation-name: duet-slide-rtl; }
+    .bubble { animation-timing-function: linear; animation-fill-mode: forwards; }
+    .bubble-inner {
+      display: inline-flex; align-items: baseline; gap: 0.6em;
+      padding: 4px 12px;
+      background: rgba(0,0,0,0.42);
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      border-radius: 6px;
+      pointer-events: auto;
+    }
+    .bubble.rtl .bubble-inner { font-style: italic; }
+    .bubble-who {
+      display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+      font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; font-style: normal;
+      font-size: 0.62em;
+      color: var(--who); text-shadow: 0 0 8px color-mix(in srgb, var(--who) 40%, transparent);
+    }
+    .bubble.ltr { --who: #c4b5fd; }
+    .bubble.rtl { --who: var(--peach); }
+    .bubble-text {
+      font-weight: 800; letter-spacing: 0.005em; white-space: nowrap;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.9), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+    }
+    .bubble:hover { animation-play-state: paused; }
+
+    @keyframes duet-float {
+      0%   { opacity: 0; transform: translateY(20px)  scale(0.6) rotate(-8deg); }
+      15%  { opacity: 1; transform: translateY(0)     scale(1.1) rotate(2deg); }
+      30%  {             transform: translateY(-30px) scale(1)   rotate(-2deg); }
+      100% { opacity: 0; transform: translateY(-220px) scale(0.9) rotate(6deg); }
+    }
+    @keyframes duet-slide-rtl { from { transform: translateX(0); } to { transform: translateX(-180vw); } }
+    @keyframes duet-slide-ltr { from { transform: translateX(0); } to { transform: translateX(180vw); } }
+
+    @media (prefers-reduced-motion: reduce) {
+      @keyframes duet-float {
+        0% { opacity: 0; transform: none; } 15% { opacity: 1; transform: none; }
+        85% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; }
+      }
+      @keyframes duet-slide-rtl {
+        0% { opacity: 0; transform: none; } 8% { opacity: 1; transform: none; }
+        92% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; }
+      }
+      @keyframes duet-slide-ltr {
+        0% { opacity: 0; transform: none; } 8% { opacity: 1; transform: none; }
+        92% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; }
+      }
+      .badge, .flash, .toast, .puck, .key, .btn-primary, .icon-key {
+        transition-duration: 0.05s !important;
+      }
+    }
+  `;
+
+  let uiHost = null;
+  let uiRoot = null;
+  let uiLayer = null;
+  function ensureUiRoot() {
+    if (uiLayer) return uiLayer;
+    uiHost = document.createElement("duet-ui");
+    // Inline !important so page CSS (even `* { … }` resets) can't hide or
+    // shift the host. Zero-size + fixed: children position against the viewport.
+    uiHost.setAttribute("style", [
+      "all: initial !important", "display: block !important", "position: fixed !important",
+      "top: 0 !important", "left: 0 !important", "width: 0 !important", "height: 0 !important",
+      "z-index: 2147483647 !important", "pointer-events: none !important"
+    ].join("; "));
+    uiRoot = uiHost.attachShadow({ mode: "closed" });
+    // Constructable stylesheets aren't subject to the page's style-src CSP;
+    // fall back to a <style> element where adopting fails (e.g. Firefox
+    // content-script wrappers).
+    try {
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(DUET_UI_CSS);
+      uiRoot.adoptedStyleSheets = [sheet];
+    } catch {
+      const style = document.createElement("style");
+      style.textContent = DUET_UI_CSS;
+      uiRoot.appendChild(style);
+    }
+    uiLayer = document.createElement("div");
+    uiLayer.className = "layer";
+    uiRoot.appendChild(uiLayer);
+    (document.documentElement || document.body).appendChild(uiHost);
+    // If the page is already fullscreen when we mount, move in right away.
+    setTimeout(reparentOverlayForFullscreen, 0);
+    return uiLayer;
+  }
+  const $ui = (id) => (uiRoot ? uiRoot.getElementById(id) : null);
+
+  function el(tag, className, attrs) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (attrs) for (const [k, v] of Object.entries(attrs)) {
+      if (k === "text") node.textContent = v;
+      else node.setAttribute(k, v);
+    }
+    return node;
+  }
+
   // ── Visual Feedback (overlay + flash) ──────────────────────
   // The overlay (badge + flash) renders only in the frame that currently
   // OWNS the badge — top frame by default, fullscreen iframe when one is.
   function ensureOverlay() {
     if (!frameOwnsBadge) return null;
-    let overlay = document.getElementById("__duet_overlay");
+    let overlay = $ui("__duet_overlay");
     if (overlay) return overlay;
-    overlay = document.createElement("div");
-    overlay.id = "__duet_overlay";
-    overlay.style.cssText = `
-      position: fixed; bottom: 22px; right: 22px; z-index: 2147483647;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
-      pointer-events: none; display: flex; flex-direction: column;
-      align-items: flex-end; gap: 8px;
-    `;
-    (document.documentElement || document.body).appendChild(overlay);
+    overlay = el("div", "overlay", { id: "__duet_overlay" });
+    ensureUiRoot().appendChild(overlay);
     restoreBadgePosition();
-    // If the user is already in fullscreen when we mount, re-parent right away
-    // so the badge appears inside the fullscreen subtree.
-    setTimeout(reparentOverlayForFullscreen, 0);
     return overlay;
   }
 
   // ── Fullscreen visibility ──────────────────────────────────
   // When any element on the page enters fullscreen, only that element's
-  // subtree is rendered — our overlay (which lives at <html> root) goes
+  // subtree is rendered — our host (which lives at <html> root) goes
   // invisible. Re-parent it into the fullscreen element so the user can
-  // still drag it, send chat messages, and react without leaving fullscreen.
-  // On exit, move it back to the document root.
+  // still drag the badge, chat, react, and see partner messages without
+  // leaving fullscreen. On exit, move it back to the document root.
   function reparentOverlayForFullscreen() {
-    if (!frameOwnsBadge) return;
-    const overlay = document.getElementById("__duet_overlay");
-    if (!overlay) return;
+    if (!uiHost) return;
     const fsEl = document.fullscreenElement
               || document.webkitFullscreenElement
               || document.msFullscreenElement
               || null;
     const wantedParent = fsEl || document.documentElement || document.body;
-    if (overlay.parentNode !== wantedParent) {
-      try { wantedParent.appendChild(overlay); } catch {}
+    if (uiHost.parentNode !== wantedParent) {
+      try { wantedParent.appendChild(uiHost); } catch {}
     }
   }
   document.addEventListener("fullscreenchange",       reparentOverlayForFullscreen);
@@ -802,7 +1176,7 @@
   // instead of upward (the default bottom-right anchor stacked flashes
   // above the badge; once dragged we want them stacking below it).
   function applyOverlayPosition(x, y) {
-    const overlay = document.getElementById("__duet_overlay");
+    const overlay = $ui("__duet_overlay");
     if (!overlay) return;
     const rect = overlay.getBoundingClientRect();
     const w = rect.width  || 200;
@@ -834,8 +1208,8 @@
   }
 
   // ── Minimized state ────────────────────────────────────────
-  // The badge can collapse into a small circular "tray" puck that takes
-  // less screen space. State is persisted so it survives reloads.
+  // The badge can collapse into a small "puck" that takes less screen space.
+  // State is persisted so it survives reloads.
   let isMinimized = false;
   function setMinimized(value) {
     if (isMinimized === value) return;
@@ -844,21 +1218,16 @@
     applyMinimizedDom();
   }
   function applyMinimizedDom() {
-    const badge = document.getElementById("__duet_badge");
-    const tray  = document.getElementById("__pp_tray");
-    if (!badge || !tray) return;
-    if (isMinimized) {
-      badge.style.display = "none";
-      tray.style.display = "inline-flex";
-    } else {
-      badge.style.display = "flex";
-      tray.style.display = "none";
-    }
+    const badge = $ui("__duet_badge");
+    const puck  = $ui("__pp_tray");
+    if (!badge || !puck) return;
+    badge.style.display = isMinimized ? "none" : "";
+    puck.classList.toggle("is-visible", isMinimized && S.connected);
   }
   // Re-clamp on viewport resize so the badge doesn't end up off-screen when
   // the window shrinks or rotates.
   window.addEventListener("resize", () => {
-    const overlay = document.getElementById("__duet_overlay");
+    const overlay = $ui("__duet_overlay");
     if (!overlay || overlay.style.left === "" || overlay.style.left === "auto") return;
     const x = parseFloat(overlay.style.left) || 0;
     const y = parseFloat(overlay.style.top)  || 0;
@@ -873,7 +1242,7 @@
       if (e.button !== 0) return;
       // Don't start drag from an interactive control inside the topbar.
       if (e.target instanceof Element && e.target.closest("button, input, a")) return;
-      const overlay = document.getElementById("__duet_overlay");
+      const overlay = $ui("__duet_overlay");
       if (!overlay) return;
       const rect = overlay.getBoundingClientRect();
       drag = {
@@ -895,12 +1264,12 @@
       e.preventDefault();
     });
 
-    const finish = (e) => {
+    const finish = () => {
       if (!drag) return;
       try { handle.releasePointerCapture(drag.pointerId); } catch {}
-      handle.style.cursor = "grab";
+      handle.style.cursor = "";
       if (drag.moved) {
-        const overlay = document.getElementById("__duet_overlay");
+        const overlay = $ui("__duet_overlay");
         if (overlay) {
           const rect = overlay.getBoundingClientRect();
           try { chrome.storage.local.set({ __duet_badge_pos: { x: rect.left, y: rect.top } }); } catch {}
@@ -915,371 +1284,299 @@
     handle.addEventListener("pointercancel", finish);
   }
 
+  // ── Badge ──────────────────────────────────────────────────
+  // Built once; render() only updates text, attributes and classes.
+  const QUICK_REACTIONS = ["😂", "💖", "🔥", "😭"];
+  const EMOJI_PACKS = {
+    "Faces":  ["😂","😭","😍","😮","😎","🤩","🥳","🤔","🙄","🥺","😴","😡","🤯","🤡","💀","😅","🤣","😢","😱","🫠"],
+    "Love":   ["❤️","💖","💕","💞","💘","💝","💓","💗","💜","🧡","💛","💚","💙","🤍","🖤","💔","✨","💯","🔥","🌹"],
+    "Hands":  ["👍","👎","👊","👋","👏","🙌","✌️","🤝","🙏","💪","🤘","🤟","🖖","🖐️","👌","🤙","✊","🫶","🫰","☝️"],
+    "Vibes":  ["🎬","🍿","🍕","🍺","🥂","🚀","🌈","☀️","🌙","🎉","🎈","💎","👾","🍔","🍦","🎸","🎮","🎵","🍷","🥶"]
+  };
+
+  // Send a reaction, show it locally, and record it in the shared recents.
+  function sendEmoji(emoji) {
+    safeSend({ type: "SEND_REACTION", emoji });
+    spawnReaction(emoji, { fromSelf: true });
+    recordRecentEmoji(emoji);
+  }
+
+  function buildBadge(overlay) {
+    const badge = el("div", "badge", { id: "__duet_badge", role: "region", "aria-label": "Duet" });
+
+    // Top bar: drag handle + live status.
+    const topbar = el("div", "topbar", { id: "__pp_topbar" });
+    topbar.append(
+      el("span", "dot"),
+      el("span", "brand", { text: "Duet" }),
+      el("span", "sep", { text: "·" }),
+      el("span", "status-emoji", { id: "__pp_status_emoji" }),
+      el("span", "status-text", { id: "__pp_status_text", "aria-live": "polite" }),
+      el("span", "ping", { id: "__pp_ping" })
+    );
+    const minBtn = el("button", "icon-key", { id: "__pp_min_btn", type: "button", title: "Minimize", "aria-label": "Minimize Duet", text: "−" });
+    minBtn.addEventListener("click", (e) => { e.stopPropagation(); setMinimized(true); });
+    minBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    topbar.appendChild(minBtn);
+    installBadgeDrag(topbar);
+
+    // Controls (shown on hover / while typing).
+    const controls = el("div", "controls", { id: "__pp_controls" });
+
+    const syncBtn = el("button", "btn-primary", { id: "__pp_sync_btn", type: "button", text: syncBtnDefaultLabel() });
+    syncBtn.addEventListener("click", onCatchUpClick);
+
+    const tray = el("div", "tray", { role: "group", "aria-label": "Reactions" });
+    for (const emoji of QUICK_REACTIONS) {
+      const key = el("button", "key", { type: "button", "aria-label": `Send ${emoji} reaction` });
+      key.innerHTML = twemojiHtml(emoji);
+      key.addEventListener("click", () => sendEmoji(emoji));
+      tray.appendChild(key);
+    }
+    const moreBtn = el("button", "key more", { id: "__pp_more_emojis", type: "button", title: "More emojis", "aria-label": "Open emoji picker", "aria-expanded": "false", text: "+" });
+    tray.appendChild(moreBtn);
+
+    const chat = el("div", "chat");
+    const chatInput = el("input", "", {
+      id: "__pp_chat_input", type: "text", maxlength: "140", autocomplete: "off", spellcheck: "false",
+      placeholder: "Send a message…", "aria-label": "Message your partner"
+    });
+    chat.append(chatInput, el("span", "hint", { text: "↵" }));
+
+    controls.append(syncBtn, tray, chat);
+
+    // Emoji drawer.
+    const drawer = el("div", "drawer", { id: "__pp_emoji_drawer" });
+    const tabs = el("div", "tabs", { role: "tablist" });
+    const grid = el("div", "tray grid", { role: "tabpanel" });
+    drawer.append(tabs, grid);
+    wireEmojiDrawer(drawer, tabs, grid, moreBtn);
+
+    badge.append(drawer, topbar, controls);
+    overlay.appendChild(badge);
+
+    // Hover opens the controls; typing keeps them open.
+    badge.addEventListener("mouseenter", () => { if (S.connected) badge.classList.add("is-open"); });
+    badge.addEventListener("mouseleave", () => {
+      if (badge.dataset.locked === "1" || drawer.classList.contains("is-open")) return;
+      badge.classList.remove("is-open");
+    });
+    wireChatInput(badge, chatInput);
+
+    // Minimized puck: click to expand, drag to move.
+    const puck = el("div", "puck", { id: "__pp_tray", title: "Click to expand · drag to move", role: "button", tabindex: "0", "aria-label": "Expand Duet" });
+    puck.append(el("span", "dot"), el("span", "status-emoji", { id: "__pp_tray_emoji" }));
+    installBadgeDrag(puck);
+    puck.addEventListener("click", (e) => {
+      if (e.defaultPrevented) return; // drag finish swallowed it
+      setMinimized(false);
+    });
+    puck.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setMinimized(false); }
+    });
+    overlay.appendChild(puck);
+
+    return badge;
+  }
+
+  async function onCatchUpClick() {
+    const syncBtn = $ui("__pp_sync_btn");
+    if (!syncBtn || syncBtn.disabled) return;
+    // Save current position for undo before syncing
+    if (!video) video = findVideo();
+    if (video) {
+      preSyncPosition = video.currentTime;
+      preSyncTimestamp = Date.now();
+    }
+    syncBtn.disabled = true;
+    const who = S.partnerName || "partner";
+    syncBtn.textContent = "Catching up…";
+    showFlash("play", `Catching up to ${who}…`);
+    const res = await safeSend({ type: "CATCH_UP_TO_PARTNER" });
+    // Only claim success when the background actually verified that local
+    // playback matches partner's projected position. Drift > 1s gets a
+    // distinct "Off by Xs" message instead of a misleading checkmark.
+    if (res?.error) {
+      showFlash("pause", res.error);
+      syncBtn.textContent = "Try again";
+    } else if (res?.ok) {
+      syncBtn.textContent = "Caught up ✓";
+      showUndoButton();
+    } else if (typeof res?.drift === "number") {
+      syncBtn.textContent = `Off by ${res.drift.toFixed(1)}s`;
+      showFlash("pause", `Couldn't fully sync — off by ${res.drift.toFixed(1)}s.`);
+    } else {
+      syncBtn.textContent = syncBtnDefaultLabel();
+    }
+    setTimeout(() => {
+      syncBtn.disabled = false;
+      syncBtn.textContent = syncBtnDefaultLabel();
+    }, 2200);
+  }
+
+  // Tabbed categories + grid + Recent (shared with the popup picker via the
+  // same chrome.storage key). Opens/closes on the "+" key.
+  function wireEmojiDrawer(drawer, tabs, grid, moreBtn) {
+    let activeTab = "Recent";
+    let recentList = [];
+
+    const loadRecents = () => new Promise((resolve) => {
+      try {
+        chrome.storage.local.get(["__duet_emoji_recents"], (data) => {
+          recentList = Array.isArray(data?.__duet_emoji_recents) ? data.__duet_emoji_recents.slice(0, 12) : [];
+          resolve();
+        });
+      } catch { resolve(); }
+    });
+
+    const renderTabs = () => {
+      const names = [];
+      if (recentList.length) names.push("Recent");
+      names.push(...Object.keys(EMOJI_PACKS));
+      if (!names.includes(activeTab)) activeTab = names[0];
+      tabs.replaceChildren(...names.map((name) => {
+        const b = el("button", "tab", { type: "button", role: "tab", "aria-selected": String(name === activeTab), text: name });
+        b.addEventListener("click", () => { activeTab = name; renderTabs(); renderGrid(); });
+        return b;
+      }));
+    };
+
+    const renderGrid = () => {
+      const list = activeTab === "Recent" ? recentList : (EMOJI_PACKS[activeTab] || []);
+      if (!list.length) {
+        grid.replaceChildren(el("div", "empty", { text: "Pick one to get started." }));
+        return;
+      }
+      grid.replaceChildren(...list.map((emoji) => {
+        const b = el("button", "key", { type: "button", "aria-label": `Send ${emoji}` });
+        b.innerHTML = twemojiHtml(emoji);
+        b.addEventListener("click", () => {
+          sendEmoji(emoji);
+          // Re-render Recent so the picked one moves to the front.
+          if (activeTab === "Recent") setTimeout(() => { loadRecents().then(() => { renderTabs(); renderGrid(); }); }, 50);
+        });
+        return b;
+      }));
+    };
+
+    moreBtn.addEventListener("click", async () => {
+      const open = drawer.classList.contains("is-open");
+      if (open) {
+        drawer.classList.remove("is-open");
+        moreBtn.textContent = "+";
+        moreBtn.setAttribute("aria-expanded", "false");
+      } else {
+        await loadRecents();
+        activeTab = recentList.length ? "Recent" : "Faces";
+        renderTabs();
+        renderGrid();
+        drawer.classList.add("is-open");
+        moreBtn.textContent = "−";
+        moreBtn.setAttribute("aria-expanded", "true");
+      }
+    });
+  }
+
+  // Inline chat — Enter sends via the reaction channel (the popup uses the
+  // same path), so the partner sees it as a floating message.
+  function wireChatInput(badge, chatInput) {
+    // Don't let typing trigger site-level shortcuts (YouTube j/k/l, space, etc.)
+    chatInput.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key !== "Enter") return;
+      const text = chatInput.value.trim().slice(0, 140);
+      if (!text) return;
+      safeSend({ type: "SEND_REACTION", emoji: text });
+      spawnReaction(text, { fromSelf: true });
+      chatInput.value = "";
+      chatInput.classList.add("sent");
+      setTimeout(() => chatInput.classList.remove("sent"), 500);
+    });
+    chatInput.addEventListener("keyup", (e) => e.stopPropagation());
+    chatInput.addEventListener("keypress", (e) => e.stopPropagation());
+    // Keep the controls open while typing, even if the mouse drifts off.
+    chatInput.addEventListener("focus", () => { badge.dataset.locked = "1"; });
+    chatInput.addEventListener("blur",  () => { delete badge.dataset.locked; });
+    // Typing indicator, throttled.
+    let typingThrottle = null;
+    chatInput.addEventListener("input", () => {
+      if (typingThrottle) return;
+      safeSend({ type: "SEND_TYPING" });
+      typingThrottle = setTimeout(() => { typingThrottle = null; }, 2000);
+    });
+  }
+
+  // good | warn | bad | idle — drives the dot colour and the cast-shadow echo.
+  function badgeHealth() {
+    if (!S.connected || S.peerCount < 2) return "idle";
+    switch (S.driftStatus) {
+      case "sync":        return "good";
+      case "warning":     return "warn";
+      case "out_of_sync":
+      case "mismatch":    return "bad";
+      default:            return "idle";
+    }
+  }
+
+  function badgeStatus() {
+    if (S.peerCount < 2) return { emoji: S.partnerEmoji && !isAvatarCode(S.partnerEmoji) ? S.partnerEmoji : "👋", text: "waiting for partner" };
+    if (S.partnerTyping)  return { emoji: "💬", text: `${S.partnerName || "partner"} is typing…` };
+    switch (S.driftStatus) {
+      case "sync":        return { emoji: "💞", text: "in sync" };
+      case "warning":     return { emoji: "⏳", text: "slight delay" };
+      case "out_of_sync": return { emoji: "⚠️", text: "out of sync" };
+      case "mismatch":    return { emoji: "🎬", text: "different video" };
+      default:            return { emoji: "📺", text: "waiting for video" };
+    }
+  }
+
   function render() {
     if (!frameOwnsBadge) return;
     const overlay = ensureOverlay();
-    let badge = document.getElementById("__duet_badge");
-    if (!badge) {
-      badge = document.createElement("div");
-      badge.id = "__duet_badge";
-      badge.style.cssText = `
-        position: relative;
-        background: linear-gradient(135deg, rgba(15,13,24,0.92), rgba(8,7,13,0.94));
-        backdrop-filter: blur(16px) saturate(1.4);
-        -webkit-backdrop-filter: blur(16px) saturate(1.4);
-        border: 1px solid rgba(255,255,255,0.10);
-        border-radius: 16px;
-        color: #f4f1ea; font-size: 11.5px; font-weight: 600; letter-spacing: 0.01em;
-        box-shadow: 0 10px 28px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04) inset;
-        transition: opacity 0.35s, transform 0.35s;
-        opacity: 0; transform: translateY(6px);
-        display: flex; flex-direction: column; pointer-events: auto;
-      `;
-      
-      const topBar = document.createElement("div");
-      topBar.id = "__pp_topbar";
-      topBar.style.cssText = "display: flex; align-items: center; gap: 8px; padding: 7px 14px 7px 11px; cursor: grab; touch-action: none; user-select: none;";
-      badge.appendChild(topBar);
+    const badge = $ui("__duet_badge") || buildBadge(overlay);
+    const puck = $ui("__pp_tray");
 
-      // Drag the whole overlay by its top bar. Position is persisted to
-      // chrome.storage so the badge stays where the user put it across loads.
-      installBadgeDrag(topBar);
-
-      const controls = document.createElement("div");
-      controls.id = "__pp_controls";
-      controls.style.cssText = "display: none; flex-direction: column; gap: 8px; padding: 0 14px 12px 14px;";
-      
-      controls.innerHTML = `
-        <div style="height: 1px; background: rgba(255,255,255,0.1); width: 100%; margin-bottom: 2px;"></div>
-        <button id="__pp_sync_btn" aria-label="Sync partner to my current timestamp" style="background: rgba(255,255,255,0.1); border: none; color: white; border-radius: 6px; padding: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s; font-size: 11px;">${escapeHtml(syncBtnDefaultLabel())}</button>
-        <div style="display: flex; gap: 6px; align-items: center;">
-          ${['😂', '💖', '🔥', '😭'].map(e => `<button class="__pp_re_btn" data-emoji="${e}" aria-label="Send ${e} reaction" style="background: rgba(255,255,255,0.05); border: none; border-radius: 6px; cursor: pointer; font-size: 15px; padding: 4px 6px; transition: background 0.2s; flex: 1;">${twemojiHtml(e)}</button>`).join('')}
-          <button id="__pp_more_emojis" title="More emojis" aria-label="Open full emoji picker" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 700; padding: 4px 8px; color: rgba(244,241,234,0.7); flex-shrink: 0;">+</button>
-        </div>
-        <div style="position: relative;">
-          <input id="__pp_chat_input" type="text" aria-label="Type a message to send to your partner" placeholder="Send a message…" maxlength="140" autocomplete="off" spellcheck="false" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 6px 26px 6px 8px; color: #f4f1ea; font-family: inherit; font-size: 11px; outline: none; transition: border-color 0.2s;" />
-          <span id="__pp_chat_hint" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 9px; color: rgba(244,241,234,0.4); pointer-events: none;">↵</span>
-        </div>
-      `;
-
-      // Floating emoji picker — sibling of the badge, absolutely positioned
-      // so it pops *above* the badge instead of inflating its height. Keeps
-      // the badge itself compact.
-      const emojiPopover = document.createElement("div");
-      emojiPopover.id = "__pp_emoji_drawer";
-      emojiPopover.style.cssText = `
-        display: none; position: absolute; bottom: calc(100% + 8px); right: 0;
-        flex-direction: column; gap: 6px;
-        background: linear-gradient(135deg, rgba(15,13,24,0.96), rgba(8,7,13,0.98));
-        backdrop-filter: blur(16px) saturate(1.4);
-        -webkit-backdrop-filter: blur(16px) saturate(1.4);
-        border: 1px solid rgba(255,255,255,0.10);
-        border-radius: 12px; padding: 8px;
-        box-shadow: 0 14px 30px rgba(0,0,0,0.5);
-        width: 240px; pointer-events: auto;
-      `;
-      emojiPopover.innerHTML = `
-        <div id="__pp_emoji_tabs" style="display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none;"></div>
-        <div id="__pp_emoji_grid" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; max-height: 140px; overflow-y: auto; scrollbar-width: thin;"></div>
-      `;
-      badge.appendChild(emojiPopover);
-      badge.appendChild(controls);
-
-      // Interactions
-      badge.addEventListener('mouseenter', () => { if(S.connected) controls.style.display = 'flex'; });
-      badge.addEventListener('mouseleave', () => {
-        // Don't collapse while the chat input is focused
-        if (controls.dataset.locked === '1') return;
-        controls.style.display = 'none';
-      });
-
-      const syncBtn = controls.querySelector('#__pp_sync_btn');
-      syncBtn.addEventListener('mouseenter', () => syncBtn.style.background = 'rgba(255,255,255,0.2)');
-      syncBtn.addEventListener('mouseleave', () => syncBtn.style.background = 'rgba(255,255,255,0.1)');
-      syncBtn.addEventListener('click', async () => {
-        if (syncBtn.disabled) return;
-        // Save current position for undo before syncing
-        if (!video) video = findVideo();
-        if (video) {
-          preSyncPosition = video.currentTime;
-          preSyncTimestamp = Date.now();
-        }
-        syncBtn.disabled = true;
-        const who = S.partnerName || "partner";
-        syncBtn.textContent = "Catching up…";
-        showFlash("play", `Catching up to ${who}…`);
-        const res = await safeSend({ type: "CATCH_UP_TO_PARTNER" });
-        // Only claim success when the background actually verified that local
-        // playback matches partner's projected position. Drift > 1s gets a
-        // distinct "Off by Xs" message instead of a misleading checkmark.
-        if (res?.error) {
-          showFlash("pause", res.error);
-          syncBtn.textContent = "Try again";
-        } else if (res?.ok) {
-          syncBtn.textContent = "Caught up ✓";
-          // Show undo button for 5s after successful sync
-          showUndoButton();
-        } else if (typeof res?.drift === "number") {
-          syncBtn.textContent = `Off by ${res.drift.toFixed(1)}s`;
-          showFlash("pause", `Couldn't fully sync — off by ${res.drift.toFixed(1)}s.`);
-        } else {
-          syncBtn.textContent = syncBtnDefaultLabel();
-        }
-        setTimeout(() => {
-          syncBtn.disabled = false;
-          syncBtn.textContent = syncBtnDefaultLabel();
-        }, 2200);
-      });
-
-      // Helper to send a reaction + show locally + record in shared recents.
-      const sendEmoji = (emoji) => {
-        safeSend({ type: "SEND_REACTION", emoji });
-        spawnReaction(emoji, { fromSelf: true });
-        recordRecentEmoji(emoji);
-      };
-
-      controls.querySelectorAll('.__pp_re_btn').forEach(btn => {
-        btn.addEventListener('mouseenter', () => btn.style.background = 'rgba(255,255,255,0.15)');
-        btn.addEventListener('mouseleave', () => btn.style.background = 'rgba(255,255,255,0.05)');
-        btn.addEventListener('click', (e) => {
-          const emoji = e.target.dataset.emoji || e.target.textContent;
-          sendEmoji(emoji);
-        });
-      });
-
-      // ── Expanded emoji picker drawer ───────────────────────
-      // Tabbed categories + scrollable grid + Recent (synced with the popup
-      // via shared chrome.storage key). Opens/closes on the "+" button.
-      const emojiDrawer = badge.querySelector('#__pp_emoji_drawer');
-      const emojiTabs   = badge.querySelector('#__pp_emoji_tabs');
-      const emojiGrid   = badge.querySelector('#__pp_emoji_grid');
-      const moreBtn     = controls.querySelector('#__pp_more_emojis');
-
-      const EMOJI_PACKS = {
-        "Faces":  ["😂","😭","😍","😮","😎","🤩","🥳","🤔","🙄","🥺","😴","😡","🤯","🤡","💀","😴","😅","🤣","😢","😱"],
-        "Love":   ["❤️","💖","💕","💞","💘","💝","💓","💗","💜","🧡","💛","💚","💙","🤍","🖤","💔","✨","💯","🔥","🌹"],
-        "Hands":  ["👍","👎","👊","👋","👏","🙌","✌️","🤝","🙏","💪","🤘","🤟","🖖","🖐️","👌","🤙","✊","🫶","🫰","☝️"],
-        "Vibes":  ["🎬","🍿","🍕","🍺","🥂","🚀","🌈","☀️","🌙","🎉","🎈","💎","👾","🍔","🍦","🎸","🎮","🎵","🍷","🥶"]
-      };
-
-      let activeTab = "Recent";
-      let recentList = [];
-
-      const renderTabs = () => {
-        emojiTabs.innerHTML = "";
-        const tabs = [];
-        if (recentList.length) tabs.push("Recent");
-        tabs.push(...Object.keys(EMOJI_PACKS));
-        if (!tabs.includes(activeTab)) activeTab = tabs[0];
-        for (const tab of tabs) {
-          const b = document.createElement("button");
-          b.textContent = tab;
-          b.style.cssText = `
-            background: ${tab === activeTab ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.04)"};
-            border: 1px solid ${tab === activeTab ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.06)"};
-            color: ${tab === activeTab ? "#f4f1ea" : "rgba(244,241,234,0.55)"};
-            border-radius: 999px; padding: 3px 10px; font-size: 10px; font-weight: 600;
-            cursor: pointer; flex-shrink: 0; white-space: nowrap; transition: all 0.15s;
-          `;
-          b.addEventListener("click", () => { activeTab = tab; renderTabs(); renderGrid(); });
-          emojiTabs.appendChild(b);
-        }
-      };
-
-      const renderGrid = () => {
-        emojiGrid.innerHTML = "";
-        const list = activeTab === "Recent" ? recentList : (EMOJI_PACKS[activeTab] || []);
-        if (!list.length) {
-          const empty = document.createElement("div");
-          empty.textContent = "Pick one to get started.";
-          empty.style.cssText = "grid-column: 1/-1; text-align:center; color: rgba(244,241,234,0.4); font-size:10px; padding: 12px 0;";
-          emojiGrid.appendChild(empty);
-          return;
-        }
-        for (const emoji of list) {
-          const b = document.createElement("button");
-          b.innerHTML = twemojiHtml(emoji);
-          b.style.cssText = `
-            background: none; border: none; cursor: pointer;
-            font-size: 18px; padding: 4px; border-radius: 6px;
-            display: grid; place-items: center; aspect-ratio: 1;
-            transition: background 0.15s, transform 0.1s;
-          `;
-          b.addEventListener("mouseenter", () => { b.style.background = "rgba(255,255,255,0.10)"; b.style.transform = "scale(1.18)"; });
-          b.addEventListener("mouseleave", () => { b.style.background = "none"; b.style.transform = "scale(1)"; });
-          b.addEventListener("click", () => {
-            sendEmoji(emoji);
-            // Re-render the Recent tab so the picked one moves to the front.
-            if (activeTab === "Recent") setTimeout(() => { loadRecents().then(() => { renderTabs(); renderGrid(); }); }, 50);
-          });
-          emojiGrid.appendChild(b);
-        }
-      };
-
-      const loadRecents = () => new Promise((resolve) => {
-        try {
-          chrome.storage.local.get(["__duet_emoji_recents"], (data) => {
-            recentList = Array.isArray(data?.__duet_emoji_recents) ? data.__duet_emoji_recents.slice(0, 12) : [];
-            resolve();
-          });
-        } catch { resolve(); }
-      });
-
-      moreBtn.addEventListener("mouseenter", () => moreBtn.style.background = "rgba(255,255,255,0.12)");
-      moreBtn.addEventListener("mouseleave", () => moreBtn.style.background = "rgba(255,255,255,0.05)");
-      moreBtn.addEventListener("click", async () => {
-        const open = emojiDrawer.style.display !== "none";
-        if (open) {
-          emojiDrawer.style.display = "none";
-          moreBtn.textContent = "+";
-        } else {
-          await loadRecents();
-          activeTab = recentList.length ? "Recent" : "Faces";
-          renderTabs();
-          renderGrid();
-          emojiDrawer.style.display = "flex";
-          moreBtn.textContent = "−";
-        }
-      });
-
-      // Inline chat — Enter sends a message via the existing reaction channel
-      // (popup uses the same path), so partner sees it as a floating message.
-      const chatInput = controls.querySelector('#__pp_chat_input');
-      if (chatInput) {
-        chatInput.addEventListener('focus', () => { chatInput.style.borderColor = 'rgba(244,114,182,0.5)'; });
-        chatInput.addEventListener('blur',  () => { chatInput.style.borderColor = 'rgba(255,255,255,0.1)'; });
-        // Don't let typing trigger site-level shortcuts (YouTube j/k/l, space, etc.)
-        chatInput.addEventListener('keydown', (e) => {
-          e.stopPropagation();
-          if (e.key === 'Enter') {
-            const text = chatInput.value.trim().slice(0, 140);
-            if (!text) return;
-            safeSend({ type: "SEND_REACTION", emoji: text });
-            spawnReaction(text, { fromSelf: true });
-            chatInput.value = '';
-            chatInput.style.borderColor = '#5ee2a0';
-            setTimeout(() => { chatInput.style.borderColor = 'rgba(244,114,182,0.5)'; }, 500);
-          }
-        });
-        // Keep the controls panel open while typing, even if the mouse drifts off.
-        chatInput.addEventListener('focus', () => { controls.dataset.locked = '1'; });
-        chatInput.addEventListener('blur',  () => { delete controls.dataset.locked; });
-        // Send typing indicator while user is typing
-        let typingThrottle = null;
-        chatInput.addEventListener('input', () => {
-          if (!typingThrottle) {
-            safeSend({ type: 'SEND_TYPING' });
-            typingThrottle = setTimeout(() => { typingThrottle = null; }, 2000);
-          }
-        });
-      }
-
-      overlay.appendChild(badge);
-
-      // ── Minimized tray chip ────────────────────────────────
-      // A small circular puck that takes the badge's place when minimized.
-      // Click to expand back. Drag-able by the same handle. Holds the same
-      // status emoji + dot so the user knows sync state at a glance.
-      const tray = document.createElement("div");
-      tray.id = "__pp_tray";
-      tray.style.cssText = `
-        display: none; align-items: center; gap: 6px;
-        background: linear-gradient(135deg, rgba(15,13,24,0.95), rgba(8,7,13,0.97));
-        backdrop-filter: blur(16px) saturate(1.4);
-        -webkit-backdrop-filter: blur(16px) saturate(1.4);
-        border: 1px solid rgba(255,255,255,0.10);
-        border-radius: 999px;
-        padding: 6px 12px 6px 10px;
-        color: #f4f1ea; font-size: 12px; font-weight: 700;
-        cursor: grab; pointer-events: auto; user-select: none;
-        touch-action: none;
-        box-shadow: 0 8px 22px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04) inset;
-      `;
-      tray.title = "Click to expand · drag to move";
-      overlay.appendChild(tray);
-      installBadgeDrag(tray);
-      // Click (without drag) expands the badge back.
-      tray.addEventListener("click", (e) => {
-        if (e.defaultPrevented) return; // drag finish swallowed it
-        setMinimized(false);
-      });
+    if (!S.connected) {
+      badge.classList.remove("is-visible", "is-open");
+      $ui("__pp_emoji_drawer")?.classList.remove("is-open");
+      puck?.classList.remove("is-visible");
+      return;
     }
-    
-    if (S.connected) {
-      let color = "#ffc89a";
-      let text = "waiting for partner";
-      let emoji = S.partnerEmoji || "👋";
 
-      if (S.peerCount >= 2) {
-        if (S.driftStatus === "sync")           { color = "#5ee2a0"; text = S.partnerTyping ? "typing…" : "in sync";           emoji = S.partnerTyping ? "💬" : "💞"; }
-        else if (S.driftStatus === "warning")   { color = "#fcd34d"; text = S.partnerTyping ? "typing…" : "slight delay";     emoji = S.partnerTyping ? "💬" : "⏳"; }
-        else if (S.driftStatus === "out_of_sync") { color = "#ef4444"; text = S.partnerTyping ? "typing…" : "out of sync";    emoji = S.partnerTyping ? "💬" : "⚠️"; }
-        else if (S.driftStatus === "mismatch")  { color = "#ef4444"; text = S.partnerTyping ? "typing…" : "different video"; emoji = S.partnerTyping ? "💬" : "🎬"; }
-        else                                          { color = "#ffc89a"; text = S.partnerTyping ? "typing…" : "waiting for video"; emoji = S.partnerTyping ? "💬" : "📺"; }
-      }
+    const health = badgeHealth();
+    const { emoji, text } = badgeStatus();
+    badge.dataset.health = health;
+    if (puck) puck.dataset.health = health;
 
-      // Connection quality: color-code ping
-      let pingText = "";
-      if (typeof S.lastPingMs === "number") {
-        const pingColor = S.lastPingMs < 100 ? "#5ee2a0" : S.lastPingMs < 300 ? "#fcd34d" : "#ef4444";
-        pingText = `<span style="color:${pingColor};font-size:9px;font-weight:500;margin-left:2px;">${S.lastPingMs}ms</span>`;
-      }
+    const emojiHtml = twemojiHtml(emoji);
+    const statusEmoji = $ui("__pp_status_emoji");
+    if (statusEmoji.dataset.v !== emoji) { statusEmoji.innerHTML = emojiHtml; statusEmoji.dataset.v = emoji; }
+    const trayEmoji = $ui("__pp_tray_emoji");
+    if (trayEmoji && trayEmoji.dataset.v !== emoji) { trayEmoji.innerHTML = emojiHtml; trayEmoji.dataset.v = emoji; }
+    $ui("__pp_status_text").textContent = text;
 
-      const topbar = document.getElementById("__pp_topbar");
-      topbar.innerHTML = `
-        <span style="width:7px;height:7px;border-radius:50%;background:${color};box-shadow:0 0 8px ${color}, 0 0 0 3px ${color}1f;display:inline-block;transition:all 0.3s;"></span>
-        <span style="background:linear-gradient(110deg,#ffc89a,#f472b6,#8b5cf6);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700">Duet</span>
-        <span style="color:rgba(244,241,234,0.55);font-weight:500">·</span>
-        <span style="font-size:12px;line-height:1;">${twemojiHtml(emoji)}</span>
-        <span style="color:rgba(244,241,234,0.85);transition:color 0.3s;flex:1;">${text}</span>
-        ${pingText}
-        <button id="__pp_min_btn" title="Minimize to tray" style="background:rgba(255,255,255,0.06);border:none;color:rgba(244,241,234,0.7);width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;display:grid;place-items:center;padding:0;margin-left:4px;">−</button>
-      `;
-      const minBtn = topbar.querySelector("#__pp_min_btn");
-      if (minBtn) {
-        minBtn.addEventListener("click", (e) => { e.stopPropagation(); setMinimized(true); });
-        // Stop pointerdown so the drag handler doesn't claim the click.
-        minBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
-      }
-
-      // Render tray content (collapsed view) with the same status info.
-      const tray = document.getElementById("__pp_tray");
-      if (tray) {
-        tray.innerHTML = `
-          <span style="width:8px;height:8px;border-radius:50%;background:${color};box-shadow:0 0 8px ${color};display:inline-block;"></span>
-          <span style="font-size:14px;line-height:1;">${twemojiHtml(emoji)}</span>
-        `;
-      }
-      applyMinimizedDom();
-      badge.style.opacity = isMinimized ? "0" : "1";
-      badge.style.transform = "translateY(0)";
+    const ping = $ui("__pp_ping");
+    if (typeof S.lastPingMs === "number") {
+      ping.textContent = `${S.lastPingMs}ms`;
+      ping.dataset.q = S.lastPingMs < 100 ? "good" : S.lastPingMs < 300 ? "ok" : "bad";
+      ping.title = "Round trip to the sync server";
     } else {
-      badge.style.opacity = "0";
-      badge.style.transform = "translateY(6px)";
-      const tray = document.getElementById("__pp_tray");
-      if (tray) tray.style.display = "none";
-      const ctrl = document.getElementById("__pp_controls");
-      if (ctrl) ctrl.style.display = 'none';
+      ping.textContent = "";
     }
+
+    badge.classList.add("is-visible");
+    applyMinimizedDom();
   }
 
   // ── Undo sync ──────────────────────────────────────────────
   // Shows a temporary "Undo" button after a successful catch-up sync.
   // Clicking it seeks the video back to the pre-sync position.
   function showUndoButton() {
-    const controls = document.getElementById("__pp_controls");
+    const controls = $ui("__pp_controls");
     if (!controls || preSyncPosition === null) return;
 
-    // Remove any existing undo button first
-    const existing = document.getElementById("__pp_undo_btn");
-    if (existing) existing.remove();
-
-    const undoBtn = document.createElement("button");
-    undoBtn.id = "__pp_undo_btn";
-    undoBtn.textContent = "↩ Undo sync";
-    undoBtn.style.cssText = "background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; border-radius: 6px; padding: 5px; font-weight: 600; cursor: pointer; transition: background 0.2s; font-size: 11px; width: 100%;";
-    undoBtn.addEventListener("mouseenter", () => { undoBtn.style.background = "rgba(239,68,68,0.25)"; });
-    undoBtn.addEventListener("mouseleave", () => { undoBtn.style.background = "rgba(239,68,68,0.15)"; });
+    $ui("__pp_undo_btn")?.remove();
+    const undoBtn = el("button", "btn-ghost", { id: "__pp_undo_btn", type: "button", text: "↩ Undo catch-up" });
     undoBtn.addEventListener("click", () => {
       if (!video) video = findVideo();
       if (video && preSyncPosition !== null) {
@@ -1290,14 +1587,9 @@
       preSyncPosition = null;
       preSyncTimestamp = null;
     });
-
-    // Insert after the sync button
-    const syncBtnEl = controls.querySelector("#__pp_sync_btn");
-    if (syncBtnEl && syncBtnEl.nextSibling) {
-      controls.insertBefore(undoBtn, syncBtnEl.nextSibling);
-    } else {
-      controls.appendChild(undoBtn);
-    }
+    const syncBtnEl = $ui("__pp_sync_btn");
+    if (syncBtnEl) syncBtnEl.after(undoBtn);
+    else controls.appendChild(undoBtn);
 
     // Auto-remove after 6 seconds
     setTimeout(() => { if (undoBtn.parentNode) undoBtn.remove(); }, 6000);
@@ -1315,29 +1607,13 @@
       return;
     }
     const overlay = ensureOverlay();
-    let flash = document.getElementById("__duet_flash");
+    let flash = $ui("__duet_flash");
     if (!flash) {
-      flash = document.createElement("div");
-      flash.id = "__duet_flash";
-      flash.style.cssText = `
-        background: linear-gradient(135deg, rgba(15,13,24,0.94), rgba(8,7,13,0.96));
-        backdrop-filter: blur(16px) saturate(1.4);
-        -webkit-backdrop-filter: blur(16px) saturate(1.4);
-        border: 1px solid rgba(255,255,255,0.10);
-        border-radius: 14px;
-        color: #f4f1ea;
-        font-size: 13px; font-weight: 600;
-        padding: 10px 14px;
-        display: flex; align-items: center; gap: 10px;
-        pointer-events: none;
-        box-shadow: 0 14px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04) inset;
-        transition: opacity 0.4s ease, transform 0.4s ease;
-        opacity: 0; transform: translateY(10px) scale(0.96);
-      `;
+      flash = el("div", "flash", { id: "__duet_flash", role: "status" });
       overlay.insertBefore(flash, overlay.firstChild);
     }
     const isPlay = action === "play";
-    const accent = isPlay ? "#5ee2a0" : "#ffc89a";
+    flash.dataset.action = isPlay ? "play" : "pause";
     const glyph = isPlay
       ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 1.5v9l8-4.5L3 1.5z" fill="currentColor"/></svg>'
       : '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="2.5" y="1.5" width="2.5" height="9" rx="0.7" fill="currentColor"/><rect x="7" y="1.5" width="2.5" height="9" rx="0.7" fill="currentColor"/></svg>';
@@ -1345,18 +1621,14 @@
     const label = customLabel || (isPlay ? `${who} played` : `${who} paused`);
     // Lead with partner's avatar (illustrated portrait or emoji fallback) so
     // the flash visually maps to who triggered it.
-    const avatarMarkup = avatarHtml(S.partnerEmoji, 22);
-    const iconMarkup = avatarMarkup
-      ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;overflow:hidden;flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,0.10);">${avatarMarkup}</span>`
-      : `<span style="display:grid;place-items:center;width:22px;height:22px;border-radius:7px;background:${accent}1a;color:${accent};box-shadow:0 0 0 1px ${accent}33 inset">${glyph}</span>`;
-    flash.innerHTML = `${iconMarkup}<span>${twemojiHtml(label)}</span>`;
-    flash.style.opacity = "1";
-    flash.style.transform = "translateY(0) scale(1)";
+    const icon = el("span", "flash-icon");
+    icon.innerHTML = avatarHtml(S.partnerEmoji, 24) || glyph;
+    const text = el("span");
+    text.innerHTML = twemojiHtml(label);
+    flash.replaceChildren(icon, text);
+    flash.classList.add("is-visible");
     clearTimeout(flash.__t);
-    flash.__t = setTimeout(() => {
-      flash.style.opacity = "0";
-      flash.style.transform = "translateY(10px) scale(0.96)";
-    }, 2500);
+    flash.__t = setTimeout(() => flash.classList.remove("is-visible"), 2500);
   }
 
   // ── Floating reactions & Chat ──────────────────────────────
@@ -1389,119 +1661,58 @@
     }
   }
 
-  // Toast for partner presence transitions (joined / left). Slides in from
-  // top, dwells ~2.5s, slides out. Replaces any existing presence toast so
-  // rapid join→leave→join doesn't pile up.
-  let __pp_presenceToastTimer = null;
-  function showPresenceToast(text, kind) {
-    let toast = document.getElementById("__pp_presence_toast");
+  // Shared by the presence toast and system pill: one element per id,
+  // replaced rather than stacked, auto-hidden after `ms`.
+  function showToast(id, kind, children, ms) {
+    const layer = ensureUiRoot();
+    let toast = $ui(id);
     if (!toast) {
-      toast = document.createElement("div");
-      toast.id = "__pp_presence_toast";
-      toast.style.cssText = `
-        position: fixed; left: 50%; top: 60px; transform: translateX(-50%) translateY(-12px);
-        z-index: 2147483647; pointer-events: none;
-        background: linear-gradient(135deg, rgba(15,13,24,0.96), rgba(8,7,13,0.98));
-        backdrop-filter: blur(14px) saturate(1.4);
-        -webkit-backdrop-filter: blur(14px) saturate(1.4);
-        border: 1px solid rgba(255,255,255,0.10);
-        border-radius: 999px;
-        padding: 8px 16px;
-        color: #f4f1ea;
-        font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
-        font-size: 12px; font-weight: 700;
-        display: inline-flex; align-items: center; gap: 8px;
-        box-shadow: 0 14px 30px rgba(0,0,0,0.5);
-        opacity: 0;
-        transition: opacity 0.3s, transform 0.3s;
-      `;
-      (document.documentElement || document.body).appendChild(toast);
+      toast = el("div", "toast", { id, role: "status" });
+      layer.appendChild(toast);
     }
-    const accent = kind === "leave" ? "#ff6b7a" : "#5ee2a0";
-    const dot = `<span style="width:8px;height:8px;border-radius:50%;background:${accent};box-shadow:0 0 8px ${accent};display:inline-block;"></span>`;
-    const av = avatarHtml(S.partnerEmoji, 18);
-    toast.innerHTML = `${av ? `<span style="display:inline-flex;width:18px;height:18px;border-radius:50%;overflow:hidden;">${av}</span>` : dot}<span>${escapeHtml(text)}</span>`;
-    requestAnimationFrame(() => {
-      toast.style.opacity = "1";
-      toast.style.transform = "translateX(-50%) translateY(0)";
-    });
-    if (__pp_presenceToastTimer) clearTimeout(__pp_presenceToastTimer);
-    __pp_presenceToastTimer = setTimeout(() => {
-      toast.style.opacity = "0";
-      toast.style.transform = "translateX(-50%) translateY(-12px)";
-    }, 2800);
+    toast.dataset.kind = kind;
+    toast.replaceChildren(...children);
+    requestAnimationFrame(() => toast.classList.add("is-visible"));
+    clearTimeout(toast.__t);
+    toast.__t = setTimeout(() => toast.classList.remove("is-visible"), ms);
   }
 
-  // Single transient pill near the badge for system status (buffering, etc.).
-  // Replaces an existing pill rather than stacking, so spamming "waiting" events
-  // doesn't pile up on screen. Auto-dismisses after 3.5s.
-  let __pp_systemPillTimer = null;
+  // Toast for partner presence transitions (joined / left).
+  function showPresenceToast(text, kind) {
+    const av = avatarHtml(S.partnerEmoji, 18);
+    let lead;
+    if (av) { lead = el("span", "toast-av"); lead.innerHTML = av; }
+    else lead = el("span", "toast-dot");
+    showToast("__pp_presence_toast", kind === "leave" ? "leave" : "join", [lead, el("span", "", { text })], 2800);
+  }
+
+  // Single transient pill for system status (buffering, etc.).
   function showSystemPill(text) {
-    let pill = document.getElementById("__pp_system_pill");
-    if (!pill) {
-      pill = document.createElement("div");
-      pill.id = "__pp_system_pill";
-      pill.style.cssText = `
-        position: fixed; left: 50%; top: 22px; transform: translateX(-50%);
-        z-index: 2147483647; pointer-events: none;
-        background: linear-gradient(135deg, rgba(15,13,24,0.94), rgba(8,7,13,0.96));
-        backdrop-filter: blur(14px) saturate(1.4);
-        -webkit-backdrop-filter: blur(14px) saturate(1.4);
-        border: 1px solid rgba(255,255,255,0.10);
-        border-radius: 999px;
-        padding: 7px 14px;
-        color: #f4f1ea;
-        font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
-        font-size: 12px; font-weight: 600;
-        box-shadow: 0 10px 24px rgba(0,0,0,0.4);
-        opacity: 0;
-        transition: opacity 0.25s, transform 0.25s;
-      `;
-      (document.documentElement || document.body).appendChild(pill);
-    }
-    const partnerLabel = S.partnerName ? `${S.partnerName}` : "Partner";
-    pill.textContent = text.replace(/^⏳ Buffering/i, `⏳ ${partnerLabel} is buffering`).replace(/\.{3,}$/, "…");
-    requestAnimationFrame(() => {
-      pill.style.opacity = "1";
-      pill.style.transform = "translateX(-50%) translateY(0)";
-    });
-    if (__pp_systemPillTimer) clearTimeout(__pp_systemPillTimer);
-    __pp_systemPillTimer = setTimeout(() => {
-      pill.style.opacity = "0";
-      pill.style.transform = "translateX(-50%) translateY(-6px)";
-    }, 3500);
+    const partnerLabel = S.partnerName || "Partner";
+    const label = text.replace(/^⏳ Buffering/i, `⏳ ${partnerLabel} is buffering`).replace(/\.{3,}$/, "…");
+    showToast("__pp_system_pill", "system", [el("span", "", { text: label })], 3500);
   }
 
   function spawnFloatingEmoji(emoji, fromSelf) {
-    const node = document.createElement("div");
+    const node = el("div", "float-emoji");
     node.innerHTML = twemojiHtml(emoji);
     const startX = fromSelf
       ? 60 + Math.random() * 30        // self → right-ish (60-90%)
       : 10 + Math.random() * 30;       // partner → left-ish (10-40%)
-    node.style.cssText = `
-      position: fixed; left: ${startX}%; bottom: 80px; font-size: 48px;
-      z-index: 2147483647; pointer-events: none;
-      filter: drop-shadow(0 4px 14px rgba(0,0,0,0.45));
-      animation: __pp_float 2.6s cubic-bezier(.2,.7,.3,1) forwards; opacity: 0;
-    `;
-    (document.documentElement || document.body).appendChild(node);
+    node.style.left = `${startX}%`;
+    ensureUiRoot().appendChild(node);
     setTimeout(() => node.remove(), 2700);
   }
 
-  // Subtitle-style scrolling chat. Improvements over the original:
-  //  1) Duration scales with message length (~12 chars/sec) so short and long
-  //     messages all travel at a comfortable reading pace.
-  //  2) Direction encodes sender: self → left-to-right, partner → right-to-left.
-  //  3) Lane reservation prevents messages from piling up on each other when
-  //     they come fast.
-  //  4) Sender prefix ("You ·" / "Alice ·") survives even on washed-out video.
-  //  5) Subtle blurred dark strip keeps text legible over bright frames
-  //     without becoming a bubble.
-  //  6) Hover-to-pause for re-reading.
-  //  7) Italic for partner / upright for self adds typographic attribution.
+  // Subtitle-style scrolling chat:
+  //  - duration scales with length (~12 chars/sec reading pace),
+  //  - direction encodes sender (self → left-to-right, partner → right-to-left),
+  //  - lanes stop fast messages from piling up on each other,
+  //  - sender prefix + avatar survive washed-out frames,
+  //  - hover pauses for re-reading; italic marks the partner.
 
   // Lane manager: 9 vertical lanes from 10% to 75% in 8.1% steps. A lane is
-  // marked busy until its `freeAt` timestamp passes (set to ~50% of slide
+  // marked busy until its `freeAt` timestamp passes (set to ~55% of slide
   // duration, the point where the message's leading edge has cleared the
   // entry side and a new one can safely start in the same row).
   const __pp_lanes = new Array(9).fill(0); // freeAt timestamps
@@ -1528,148 +1739,28 @@
   function spawnChatBubble(text, fromSelf) {
     const trimmed = String(text).slice(0, 140);
     const len = trimmed.length;
-
-    // (1) Reading-paced duration. Base 6s + ~80ms per character (≈12 chars/sec
-    //     visible). Clamp to [7s, 22s] so 1-char messages still register and
-    //     140-char messages don't camp the screen.
+    // Base 6s + ~80ms per character, clamped to [7s, 22s].
     const durSec = Math.max(7, Math.min(22, 6 + len * 0.08));
     const durationMs = durSec * 1000;
 
-    // (3) Lane.
-    const topY = pickLane(durationMs);
+    const node = el("div", `bubble ${fromSelf ? "ltr" : "rtl"}`);
+    node.style.top = `${pickLane(durationMs)}%`;
+    node.style.fontSize = `${len < 30 ? 28 : len < 70 ? 22 : 18}px`;
+    node.style.animationDuration = `${durSec}s`;
 
-    // (2) Direction.
-    const direction = fromSelf ? "ltr" : "rtl";
-
-    // Adapt font-size to length so very long messages still fit on one line
-    const fontSize = len < 30 ? 28 : len < 70 ? 22 : 18;
-    const accent = fromSelf ? "#c4b5fd" : "#ffc89a"; // violet vs peach
-
-    // (4) Sender prefix.
-    const who = fromSelf ? "You" : (S.partnerName || "Partner");
-
-    const node = document.createElement("div");
-    // (6) Hover-to-pause needs pointer events on, but the wrapper is a strip
-    //     of arbitrary width — only its inner content is interactive.
-    node.style.cssText = `
-      position: fixed; top: ${topY}%; z-index: 2147483647;
-      max-width: 70vw; pointer-events: none;
-      font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
-      font-size: ${fontSize}px;
-      animation: __pp_slide_${direction} ${durSec}s linear forwards;
-      will-change: transform;
-      ${direction === "ltr" ? "left: -100%;" : "right: -100%;"}
-    `;
-
-    // (5) Subtle backdrop strip. Padding + faint dark blur for legibility,
-    //     no border or shadow that screams "card".
-    const inner = document.createElement("span");
-    inner.style.cssText = `
-      display: inline-flex; align-items: baseline; gap: 0.6em;
-      padding: 4px 12px;
-      background: rgba(0,0,0,0.42);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-      border-radius: 6px;
-      pointer-events: auto;
-      ${fromSelf ? "" : "font-style: italic;"}  /* (7) typographic attribution */
-    `;
-
-    const senderEl = document.createElement("span");
-    senderEl.style.cssText = `
-      font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
-      font-size: 0.62em; color: ${accent};
-      text-shadow: 0 0 8px ${accent}66;
-      flex-shrink: 0; font-style: normal;
-      display: inline-flex; align-items: center; gap: 5px;
-    `;
+    const inner = el("span", "bubble-inner");
+    const who = el("span", "bubble-who");
     // Tiny avatar inline with the sender label so attribution survives even
     // on bright frames where color contrast washes out.
-    const avatarVal = fromSelf ? myEmoji : S.partnerEmoji;
-    senderEl.innerHTML = `${avatarHtml(avatarVal, 14) || ""}<span>${escapeHtml(who)}</span>`;
-
-    const textEl = document.createElement("span");
-    textEl.textContent = trimmed;
-    textEl.style.cssText = `
-      font-weight: 800; letter-spacing: 0.005em;
-      color: #f4f1ea; white-space: nowrap;
-      text-shadow:
-        2px 2px 4px rgba(0,0,0,0.9),
-        -1px -1px 0 #000, 1px -1px 0 #000,
-        -1px 1px 0 #000, 1px 1px 0 #000;
-    `;
-
-    inner.appendChild(senderEl);
-    inner.appendChild(textEl);
+    const avatar = avatarHtml(fromSelf ? myEmoji : S.partnerEmoji, 14);
+    if (avatar) { const av = el("span"); av.innerHTML = avatar; who.appendChild(av); }
+    who.appendChild(el("span", "", { text: fromSelf ? "You" : (S.partnerName || "Partner") }));
+    inner.append(who, el("span", "bubble-text", { text: trimmed }));
     node.appendChild(inner);
 
-    // (6) Hover-to-pause.
-    inner.addEventListener("mouseenter", () => { node.style.animationPlayState = "paused"; });
-    inner.addEventListener("mouseleave", () => { node.style.animationPlayState = "running"; });
-
-    (document.documentElement || document.body).appendChild(node);
+    ensureUiRoot().appendChild(node);
     setTimeout(() => node.remove(), durationMs + 100);
   }
-
-  // Inject keyframes + bubble styles once
-  (function injectReactionStyles() {
-    if (document.getElementById("__pp_styles")) return;
-    const s = document.createElement("style");
-    s.id = "__pp_styles";
-    s.textContent = `
-      @keyframes __pp_float {
-        0%   { opacity: 0; transform: translateY(20px)  scale(0.6) rotate(-8deg); }
-        15%  { opacity: 1; transform: translateY(0)     scale(1.1) rotate(2deg); }
-        30%  {              transform: translateY(-30px) scale(1)   rotate(-2deg); }
-        100% { opacity: 0; transform: translateY(-220px) scale(0.9) rotate(6deg); }
-      }
-      /* Right-to-left (partner): enters from right edge, exits left. */
-      @keyframes __pp_slide_rtl {
-        0%   { transform: translateX(0); }
-        100% { transform: translateX(-180vw); }
-      }
-      /* Left-to-right (self): enters from left edge, exits right. */
-      @keyframes __pp_slide_ltr {
-        0%   { transform: translateX(0); }
-        100% { transform: translateX(180vw); }
-      }
-      /* Hide scrollbar for emoji picker */
-      #__pp_controls > div:nth-child(3)::-webkit-scrollbar { display: none; }
-
-      /* ── Reduced-motion ─────────────────────────────────── */
-      @media (prefers-reduced-motion: reduce) {
-        /* Floating emoji: skip travel, just fade in/out in place */
-        @keyframes __pp_float {
-          0%   { opacity: 0; transform: none; }
-          15%  { opacity: 1; transform: none; }
-          85%  { opacity: 1; transform: none; }
-          100% { opacity: 0; transform: none; }
-        }
-        /* Chat slides: cross-fade instead of scrolling */
-        @keyframes __pp_slide_rtl {
-          0%   { opacity: 0; transform: none; }
-          8%   { opacity: 1; transform: none; }
-          92%  { opacity: 1; transform: none; }
-          100% { opacity: 0; transform: none; }
-        }
-        @keyframes __pp_slide_ltr {
-          0%   { opacity: 0; transform: none; }
-          8%   { opacity: 1; transform: none; }
-          92%  { opacity: 1; transform: none; }
-          100% { opacity: 0; transform: none; }
-        }
-        /* Badge & flash entrance / exit: near-instant */
-        #__duet_badge,
-        #__duet_flash,
-        #__pp_presence_toast,
-        #__pp_system_pill {
-          transition-duration: 0.05s !important;
-          animation-duration: 0.05s !important;
-        }
-      }
-    `;
-    (document.head || document.documentElement).appendChild(s);
-  })();
 
   // currentDriftStatus → S.driftStatus (state machine)
   
@@ -1693,8 +1784,9 @@
         if (tabInfoTimer) { clearInterval(tabInfoTimer); tabInfoTimer = null; }
       }
       if (nextConnected) sendTabInfo();
-      // Toast on partner presence transitions.
-      if (wasConnected) {
+      // Toast on partner presence transitions (owner frame only — every
+      // frame gets this message).
+      if (wasConnected && frameOwnsBadge) {
         if (prevPeerCount < 2 && nextPeerCount >= 2) {
           showPresenceToast(`${S.partnerName || "Partner"} is here`, "join");
         } else if (prevPeerCount >= 2 && nextPeerCount < 2) {
@@ -1702,6 +1794,8 @@
         }
       }
     } else if (message.type === "SHOW_REACTION") {
+      // Sent to every frame; only the badge owner draws it.
+      if (!frameOwnsBadge) return;
       logSyncEvent("REACTION", { emoji: message.emoji, mine: !!message.mine });
       spawnReaction(message.emoji, { fromSelf: !!message.mine });
     } else if (message.type === "SYNC_STATUS") {

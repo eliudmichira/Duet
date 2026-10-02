@@ -743,7 +743,8 @@ async function catchUpToPartner() {
     currentTime: partnerMeta.currentTime,
     playbackRate: typeof partnerMeta.playbackRate === "number" ? partnerMeta.playbackRate : 1,
     serverTime: typeof partnerMeta.lastSeen === "number" ? partnerMeta.lastSeen : serverNow(),
-    force: true
+    force: true,
+    catchUp: true // we asked for this; the content script words its flash accordingly
   };
   await sendToAllFrames(targetTabId, { type: "REMOTE_SYNC", state, serverNow: serverNow() });
 

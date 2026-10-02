@@ -83,6 +83,12 @@ $("join-code-input").addEventListener("input", (e) => {
   if (cleaned !== e.target.value) e.target.value = cleaned;
 });
 
+$("trouble-link").addEventListener("click", () => {
+  const panel = $("trouble");
+  panel.hidden = !panel.hidden;
+  $("trouble-link").setAttribute("aria-expanded", String(!panel.hidden));
+});
+
 $("leave-btn").addEventListener("click", async () => {
   try { await chrome.runtime.sendMessage({ type: "LEAVE_ROOM" }); } catch {}
   setDisconnectedState();
@@ -230,6 +236,10 @@ function setDisconnectedState() {
 
 function updatePeerHint(count) {
   const el = $("peer-hint");
+  // The code is only needed until the partner arrives; after that the card
+  // collapses (status pill still shows the room) and the popup fits Chrome's
+  // 600px height without scrolling. It comes back if they leave.
+  $("room-card").hidden = count >= 2;
   if (count >= 2) {
     // Once partner data lands, renderPartnerCard() will reflect "in sync".
     // Until then we just acknowledge they joined — don't overclaim.
@@ -446,15 +456,22 @@ function renderDiag(d) {
 
   const pill = $("diag-pill");
   const label = $("diag-label");
+  const link = $("trouble-link");
   pill.classList.remove("warn", "err");
+  link.classList.remove("warn", "err");
   if (errFresh) {
     pill.classList.add("err");
     label.textContent = "Diagnostics · error";
+    link.classList.add("err");
+    $("trouble-text").textContent = "Sync problem — see details";
   } else if (partnerStale) {
     pill.classList.add("warn");
     label.textContent = "Diagnostics · partner stale";
+    link.classList.add("warn");
+    $("trouble-text").textContent = "Partner seems stuck — see details";
   } else {
     label.textContent = "Diagnostics · healthy";
+    $("trouble-text").textContent = "Having trouble?";
   }
 
   // Banner: surface the most actionable hint
