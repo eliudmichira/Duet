@@ -40,7 +40,19 @@
       border-radius: 8px;
     }
 
+    ::selection {
+      background: rgba(244, 114, 182, 0.35);
+      color: var(--text);
+    }
+
     :root {
+      color-scheme: dark;
+      accent-color: #ff8a6b;
+      --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+      --scrollbar-track: transparent;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+      scrollbar-width: thin;
+
       /* Motion tokens (see DESIGN.md "Motion"). Entrances/exits use the
          strong ease-out; the drawer has its own curve; --press is the
          documented press physics (shadow lags position). */
@@ -100,7 +112,10 @@
       background: linear-gradient(180deg, #0c0a14 0%, var(--bg-0) 100%);
       color: var(--text);
       font-family: 'Inter', system-ui, sans-serif;
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+      scrollbar-width: thin;
       position: relative;
       letter-spacing: -0.005em;
       /* Top rim catches the ambient light; bottom shadow seats the popup */
@@ -1061,6 +1076,9 @@
       transform: none;
       visibility: visible;
       transition: transform 0.35s var(--ease-drawer), visibility 0s;
+      @starting-style {
+        transform: translateY(100%);
+      }
     }
     .emoji-drawer-header {
       padding: 14px 18px 10px;
@@ -1094,6 +1112,10 @@
       flex: 1; overflow-y: auto;
       display: grid; grid-template-columns: repeat(6, 1fr);
       gap: 6px; padding: 8px 14px 24px;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+      scrollbar-width: thin;
+      mask-image: linear-gradient(to bottom, black calc(100% - 24px), transparent 100%);
+      -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 24px), transparent 100%);
     }
     .emoji-item {
       font-size: 22px; background: none; border: none;
@@ -1458,7 +1480,7 @@
         </details>
         <details style="margin-top: 6px;">
           <summary style="cursor: pointer; font-size: 11px; font-weight: 600; color: rgba(244,241,234,0.7); padding: 4px 0;">Sync Event Timeline</summary>
-          <div id="sync-timeline" style="max-height: 120px; overflow-y: auto; font-size: 10px; font-family: monospace; color: rgba(244,241,234,0.6); padding: 4px 0; scrollbar-width: thin;"></div>
+          <div id="sync-timeline" style="max-height: 120px; overflow-y: auto; font-size: 10px; font-family: monospace; color: rgba(244,241,234,0.6); padding: 4px 0; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); scrollbar-width: thin;"></div>
         </details>
         </div>
       </div>

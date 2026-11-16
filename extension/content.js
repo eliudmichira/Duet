@@ -717,10 +717,19 @@
   // one Lifted primary, reactions are keys in a Recessed tray, the chat box
   // is a Recessed input.
   const DUET_UI_CSS = `
-    :host { all: initial; }
+    :host { all: initial; color-scheme: dark; }
     *, *::before, *::after { box-sizing: border-box; }
 
+    ::selection {
+      background: rgba(244, 114, 182, 0.35);
+      color: #fff;
+    }
+
     .layer {
+      color-scheme: dark;
+      accent-color: var(--coral);
+      scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+      scrollbar-width: thin;
       --text: #f4f1ea;
       --muted: rgba(244,241,234,0.58);
       --border: rgba(255,255,255,0.09);
@@ -961,6 +970,10 @@
       opacity: 1; transform: none;
       visibility: visible; pointer-events: auto;
       transition: opacity .18s var(--ease-out), transform .18s var(--ease-out), visibility 0s;
+      @starting-style {
+        opacity: 0;
+        transform: scale(0.96);
+      }
     }
     .tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
     .tabs::-webkit-scrollbar { display: none; }
@@ -980,7 +993,11 @@
     }
     .grid {
       display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px;
-      max-height: 148px; overflow-y: auto; scrollbar-width: thin;
+      max-height: 148px; overflow-y: auto;
+      scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+      scrollbar-width: thin;
+      mask-image: linear-gradient(to bottom, black calc(100% - 20px), transparent 100%);
+      -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 20px), transparent 100%);
     }
     .grid .key { height: 34px; font-size: 18px; }
     .grid .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: 12px; padding: 12px 0; }

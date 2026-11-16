@@ -27,7 +27,19 @@
       border-radius: 8px;
     }
 
+    ::selection {
+      background: rgba(244, 114, 182, 0.35);
+      color: var(--text);
+    }
+
     :root {
+      color-scheme: dark;
+      accent-color: #ff8a6b;
+      --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+      --scrollbar-track: transparent;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+      scrollbar-width: thin;
+
       --bg-0:    #08070d;
       --bg-1:    #0f0d18;
       --surface: rgba(255,255,255,0.04);
