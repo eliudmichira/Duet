@@ -714,9 +714,9 @@ async function measurePing() {
   const start = Date.now();
   try {
     await pingRef.set(firebase.database.ServerValue.TIMESTAMP);
-    const snap = await pingRef.once("value");
     lastPingMs = Date.now() - start;
     lastPingAt = Date.now();
+    broadcastPartnerMeta();
   } catch {
     lastPingMs = null;
   }
