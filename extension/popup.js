@@ -48,7 +48,10 @@ $("join-btn").addEventListener("click", async () => {
 });
 
 $("join-code-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") $("join-btn").click();
+  if (e.key === "Enter") {
+    if (e.isComposing || e.keyCode === 229) return;
+    $("join-btn").click();
+  }
 });
 
 // ── Display name (persisted) ──────────────────────────────
@@ -189,6 +192,7 @@ $("reactions-tray").addEventListener("click", (e) => {
 const MAX_CHAT_LEN = 140;
 $("chat-input").addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
+  if (e.isComposing || e.keyCode === 229) return;
   const raw = $("chat-input").value.trim();
   if (!raw) return;
   const text = raw.slice(0, MAX_CHAT_LEN);
@@ -265,7 +269,7 @@ function updatePeerHint(count) {
 
 function renderCodeCells(code) {
   const host = $("room-code-display");
-  host.innerHTML = "";
+  host.replaceChildren();
   const chars = (code || "------").padEnd(6, "-").split("").slice(0, 6);
   for (const ch of chars) {
     const cell = document.createElement("span");
@@ -301,7 +305,7 @@ function renderPartnerAvatar() {
   if (!el) return;
   const value = partnerMeta?.emoji;
   if (value && isAvatarCode(value)) {
-    el.innerHTML = "";
+    el.replaceChildren();
     const img = document.createElement("img");
     img.src = avatarUrl(value);
     img.alt = "";
@@ -309,7 +313,7 @@ function renderPartnerAvatar() {
     el.appendChild(img);
     el.classList.add("visible");
   } else if (value && typeof value === "string" && value.length > 0 && value.length <= 4) {
-    el.innerHTML = "";
+    el.replaceChildren();
     el.textContent = value;
     el.classList.add("visible");
     el.style.display = "inline-flex";
@@ -317,7 +321,7 @@ function renderPartnerAvatar() {
     el.style.justifyContent = "center";
     el.style.fontSize = "11px";
   } else {
-    el.innerHTML = "";
+    el.replaceChildren();
     el.classList.remove("visible");
   }
 }
@@ -665,7 +669,7 @@ function avatarUrl(code) {
 // target element. For avatar codes we inject an <img>; for emoji we set text.
 function renderAvatarInto(el, value, sizePx) {
   if (!el) return;
-  el.innerHTML = "";
+  el.replaceChildren();
   el.classList.remove("has-img");
   if (isAvatarCode(value)) {
     const img = document.createElement("img");
@@ -735,7 +739,7 @@ function closeEmojiPicker() {
 function renderEmojiCategories() {
   const host = $("emoji-categories");
   if (!host) return;
-  host.innerHTML = "";
+  host.replaceChildren();
   // Avatar mode: a single "Avatars" pack of illustrated portraits.
   // Reaction mode: emoji packs + Recent (if any).
   let cats = [];
@@ -765,7 +769,7 @@ function renderEmojiCategories() {
 function renderEmojiGrid() {
   const host = $("emoji-grid");
   if (!host) return;
-  host.innerHTML = "";
+  host.replaceChildren();
 
   let list;
   if (pickerMode === "avatar") {
@@ -862,7 +866,7 @@ const QUICK_PICK_CODES = ["av:00", "av:01", "av:02", "av:03", "av:04", "av:05", 
 function buildQuickAvatars() {
   const row = $("quick-avatars");
   if (!row) return;
-  row.innerHTML = "";
+  row.replaceChildren();
   for (const code of QUICK_PICK_CODES) {
     const btn = document.createElement("button");
     btn.type = "button";

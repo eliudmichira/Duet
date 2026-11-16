@@ -1569,6 +1569,7 @@
     chatInput.addEventListener("keydown", (e) => {
       e.stopPropagation();
       if (e.key !== "Enter") return;
+      if (e.isComposing || e.keyCode === 229) return;
       const text = chatInput.value.trim().slice(0, 140);
       if (!text) return;
       safeSend({ type: "SEND_REACTION", emoji: text });
