@@ -289,12 +289,14 @@
         inset 0 1px 0 rgba(255,255,255,0.45),
         inset 0 -2px 4px rgba(0,0,0,0.18);
     }
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow:
-        0 12px 28px rgba(255,138,107,0.50),
-        inset 0 1px 0 rgba(255,255,255,0.55),
-        inset 0 -2px 4px rgba(0,0,0,0.18);
+    @media (hover: hover) and (pointer: fine) {
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow:
+          0 12px 28px rgba(255,138,107,0.50),
+          inset 0 1px 0 rgba(255,255,255,0.55),
+          inset 0 -2px 4px rgba(0,0,0,0.18);
+      }
     }
     .btn-primary:active {
       transform: translateY(0);
@@ -313,13 +315,15 @@
         inset 0 1px 0 rgba(255,255,255,0.10),
         inset 0 -2px 4px rgba(0,0,0,0.20);
     }
-    .btn-secondary:hover {
-      transform: translateY(-2px);
-      border-color: var(--border-strong);
-      box-shadow:
-        0 10px 22px rgba(0,0,0,0.45),
-        inset 0 1px 0 rgba(255,255,255,0.14),
-        inset 0 -2px 4px rgba(0,0,0,0.20);
+    @media (hover: hover) and (pointer: fine) {
+      .btn-secondary:hover {
+        transform: translateY(-2px);
+        border-color: var(--border-strong);
+        box-shadow:
+          0 10px 22px rgba(0,0,0,0.45),
+          inset 0 1px 0 rgba(255,255,255,0.14),
+          inset 0 -2px 4px rgba(0,0,0,0.20);
+      }
     }
 
     /* ── How it works ── */
@@ -367,9 +371,11 @@
       transition: transform .2s ease, box-shadow .25s ease;
     }
 
-    .step:hover {
-      transform: translateY(-3px);
-      box-shadow: var(--lift-neutral-hi), var(--emboss-rim-soft), var(--emboss-base);
+    @media (hover: hover) and (pointer: fine) {
+      .step:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--lift-neutral-hi), var(--emboss-rim-soft), var(--emboss-base);
+      }
     }
 
     /* gradient border */

@@ -19,6 +19,7 @@
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
+        animation-delay: 0s !important;   /* staggered entrances must not leave gaps */
       }
     }
 
@@ -29,6 +30,10 @@
     }
 
     :root {
+      /* Motion tokens — same values as the extension (DESIGN.md "Motion"). */
+      --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+      --press: transform .15s ease, box-shadow .25s ease;
+
       --bg-0:    #08070d;
       --border:  rgba(255,255,255,0.08);
       --border-strong: rgba(255,255,255,0.14);
@@ -153,7 +158,7 @@
       text-decoration: none;
       cursor: pointer;
       border: none;
-      transition: transform .15s ease, box-shadow .25s ease, opacity .2s;
+      transition: var(--press), opacity .2s;
     }
     .btn-primary {
       color: #14111c;
@@ -165,7 +170,11 @@
       background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04));
       border: 1px solid var(--border);
     }
-    .btn:hover:not(:disabled) { transform: translateY(-2px); }
+    /* Mouse only: on phones a tap fires :hover and leaves the button stuck
+       in its lifted state. */
+    @media (hover: hover) and (pointer: fine) {
+      .btn:hover:not(:disabled) { transform: translateY(-2px); }
+    }
     .btn:active:not(:disabled) { transform: translateY(0); }
     .btn:disabled { opacity: .6; cursor: default; }
 
@@ -201,6 +210,28 @@
       animation: pulse 1.6s ease-in-out infinite;
     }
     @keyframes pulse { 50% { opacity: .35; } }
+
+    /* State changes (checking → install / ready → joined) ease in instead
+       of swapping instantly. Sections restart this each time they're shown. */
+    .card > section { animation: state-in .28s var(--ease-out) backwards; }
+    @keyframes state-in { from { opacity: 0; transform: translateY(6px); } }
+
+    /* "You're in": the one celebratory moment on this page. Lines rise in a
+       short stagger and the Connected dot sends out a single ring — the same
+       ring the extension uses when two screens click into sync. */
+    #state-joined { animation: none; }
+    #state-joined > * { animation: state-in .34s var(--ease-out) backwards; }
+    #state-joined > :nth-child(2) { animation-delay: 50ms; }
+    #state-joined > :nth-child(3) { animation-delay: 100ms; }
+    #state-joined > :nth-child(n+4) { animation-delay: 150ms; }
+    #state-joined .pulse { position: relative; }
+    #state-joined .pulse::after {
+      content: ""; position: absolute; inset: -2px; border-radius: 50%;
+      box-shadow: 0 0 0 2px var(--success);
+      opacity: 0;
+      animation: ring-out .7s ease-out .2s backwards;
+    }
+    @keyframes ring-out { 0% { opacity: 0; transform: scale(.8); } 10% { opacity: .9; } 100% { opacity: 0; transform: scale(3); } }
 
     [hidden] { display: none !important; }
   </style>
