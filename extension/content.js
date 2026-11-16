@@ -735,7 +735,13 @@
       --lift-small:        0 3px 8px rgba(0,0,0,0.30);
       --lift-small-hi:     0 6px 14px rgba(0,0,0,0.40);
       --recess:            inset 0 1px 2px rgba(0,0,0,0.35), inset 0 -1px 0 rgba(255,255,255,0.04);
-      --surface: linear-gradient(180deg, rgba(32,29,44,0.95) 0%, rgba(18,16,26,0.96) 50%, rgba(11,10,16,0.97) 100%);
+      /* Near-opaque on purpose: surfaces sit over playing video without a
+         backdrop blur, which would be re-rendered on every video frame. */
+      --surface: linear-gradient(180deg, rgba(32,29,44,0.97) 0%, rgba(18,16,26,0.975) 50%, rgba(11,10,16,0.98) 100%);
+      /* Motion tokens (DESIGN.md "Motion"). */
+      --ease-out:       cubic-bezier(0.23, 1, 0.32, 1);     /* entrances / exits */
+      --ease-overshoot: cubic-bezier(0.3, 1.45, 0.5, 1);    /* the duet mark's click-in */
+      --press: transform .15s ease, box-shadow .25s ease;   /* press physics: shadow lags position */
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
       color: var(--text);
       font-size: 12px; line-height: 1.3; font-weight: 600; letter-spacing: 0.005em;
@@ -765,11 +771,9 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 16px;
-      backdrop-filter: blur(16px) saturate(1.4);
-      -webkit-backdrop-filter: blur(16px) saturate(1.4);
       box-shadow: var(--cast), var(--emboss-rim-soft), var(--emboss-base);
       opacity: 0; transform: translateY(6px);
-      transition: opacity .35s ease, transform .35s ease, box-shadow .45s ease;
+      transition: opacity .25s var(--ease-out), transform .25s var(--ease-out), box-shadow .45s ease;
     }
     .badge.is-visible { opacity: 1; transform: none; }
     .badge[data-health="good"] { --cast: 0 10px 28px rgba(0,0,0,0.40), 0 6px 22px rgba(94,226,160,0.22); }
@@ -846,7 +850,7 @@
       border: 1px solid transparent; border-radius: 50%;
       background: rgba(255,255,255,0.05);
       color: var(--muted); font-size: 15px; line-height: 1;
-      transition: transform .15s ease, box-shadow .25s ease, background .2s, color .2s;
+      transition: var(--press), background .2s, color .2s;
     }
     .icon-key:hover {
       color: var(--text);
@@ -870,7 +874,7 @@
       font-weight: 700; font-size: 12px; color: #14111c;
       background: linear-gradient(180deg, var(--peach) 0%, var(--coral) 50%, var(--rose) 100%);
       box-shadow: 0 4px 12px rgba(255,138,107,0.35), var(--emboss-rim), var(--emboss-base);
-      transition: transform .15s ease, box-shadow .25s ease, opacity .2s;
+      transition: var(--press), opacity .2s;
     }
     .btn-primary:hover:not(:disabled) {
       transform: translateY(-1px);
@@ -903,7 +907,7 @@
       border: 1px solid transparent; border-radius: 8px;
       background: transparent;
       font-size: 16px; line-height: 1;
-      transition: transform .15s ease, box-shadow .25s ease, background .2s;
+      transition: var(--press), background .2s;
     }
     .key:hover {
       background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 100%);
@@ -938,17 +942,26 @@
 
     /* Emoji drawer: Lifted card popping above the badge. */
     .drawer {
-      display: none; flex-direction: column; gap: 8px;
+      display: flex; flex-direction: column; gap: 8px;
       position: absolute; bottom: calc(100% + 8px); right: 0;
       width: 300px; padding: 8px;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 16px;
-      backdrop-filter: blur(16px) saturate(1.4);
-      -webkit-backdrop-filter: blur(16px) saturate(1.4);
       box-shadow: 0 14px 30px rgba(0,0,0,0.50), var(--emboss-rim-soft), var(--emboss-base);
+      /* Grows out of the "+" key that opened it (bottom-right, just below)
+         rather than appearing from nowhere. Closed: invisible, inert, and
+         out of the tab order; the visibility delay lets the exit finish. */
+      transform-origin: calc(100% - 28px) 100%;
+      opacity: 0; transform: scale(0.96);
+      visibility: hidden; pointer-events: none;
+      transition: opacity .14s var(--ease-out), transform .14s var(--ease-out), visibility 0s .14s;
     }
-    .drawer.is-open { display: flex; }
+    .drawer.is-open {
+      opacity: 1; transform: none;
+      visibility: visible; pointer-events: auto;
+      transition: opacity .18s var(--ease-out), transform .18s var(--ease-out), visibility 0s;
+    }
     .tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
     .tabs::-webkit-scrollbar { display: none; }
     .tab {
@@ -984,7 +997,7 @@
       font-size: 13px;
       cursor: grab; touch-action: none; user-select: none;
       box-shadow: var(--cast), var(--emboss-rim-soft), var(--emboss-base-soft);
-      transition: transform .15s ease, box-shadow .25s ease;
+      transition: var(--press);
     }
     .puck.is-visible { display: inline-flex; }
     .puck:hover { transform: translateY(-1px); }
@@ -1005,9 +1018,14 @@
       box-shadow: 0 12px 30px rgba(0,0,0,0.50), 0 4px 18px color-mix(in srgb, var(--accent) 22%, transparent),
                   var(--emboss-rim-soft), var(--emboss-base);
       opacity: 0; transform: translateY(10px) scale(0.96);
-      transition: opacity .4s ease, transform .4s ease;
+      transition: opacity .4s ease, transform .4s ease;   /* exit: unhurried */
     }
-    .flash.is-visible { opacity: 1; transform: none; }
+    /* Entrance is quick: the duet mark starts animating the moment the flash
+       is shown, and a .4s fade hid its first third. */
+    .flash.is-visible {
+      opacity: 1; transform: none;
+      transition: opacity .15s var(--ease-out), transform .25s var(--ease-out);
+    }
     .flash[data-action="pause"] { --accent: var(--peach); }
     .flash-icon {
       width: 24px; height: 24px; flex-shrink: 0;
@@ -1029,7 +1047,7 @@
       box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10), 0 0 14px rgba(244,114,182,0.25);
     }
     .mark svg { width: 18px; height: 18px; overflow: visible; animation: duet-click .46s ease .3s both; }
-    .mark .half { transform-box: fill-box; animation: .42s cubic-bezier(.3,1.45,.5,1) both; }
+    .mark .half { transform-box: fill-box; animation: .42s var(--ease-overshoot) both; }
     .mark[data-shape="pause"] .a { animation-name: duet-from-left; }
     .mark[data-shape="pause"] .b { animation-name: duet-from-right; }
     .mark[data-shape="play"]  .a { animation-name: duet-from-top; }
@@ -1078,7 +1096,7 @@
       position: fixed; bottom: 80px; font-size: 48px; pointer-events: none;
       filter: drop-shadow(0 4px 14px rgba(0,0,0,0.45));
       opacity: 0;
-      animation: duet-float 2.6s cubic-bezier(.2,.7,.3,1) forwards;
+      animation: duet-float 2.6s var(--ease-out) forwards;
     }
     .bubble {
       position: fixed; max-width: 70vw; pointer-events: none;
@@ -1140,9 +1158,10 @@
         0% { opacity: 0; transform: translateX(-50%); } 8% { opacity: 1; transform: translateX(-50%); }
         92% { opacity: 1; transform: translateX(-50%); } 100% { opacity: 0; transform: translateX(-50%); }
       }
-      .badge, .flash, .toast, .puck, .key, .btn-primary, .icon-key {
+      .badge, .flash, .toast, .puck, .key, .btn-primary, .icon-key, .drawer {
         transition-duration: 0.05s !important;
       }
+      .drawer { transform: none; }
       .av.typing { animation: none; }
       .mark svg, .mark .half, .mark::after { animation: none !important; }
     }
@@ -1486,7 +1505,10 @@
     const loadRecents = () => new Promise((resolve) => {
       try {
         chrome.storage.local.get(["__duet_emoji_recents"], (data) => {
-          recentList = Array.isArray(data?.__duet_emoji_recents) ? data.__duet_emoji_recents.slice(0, 12) : [];
+          // The key is shared with the popup, which also stores recently
+          // picked avatars ("av:NN") there — those aren't reactions.
+          recentList = (Array.isArray(data?.__duet_emoji_recents) ? data.__duet_emoji_recents : [])
+            .filter((e) => typeof e === "string" && !isAvatarCode(e)).slice(0, 12);
           resolve();
         });
       } catch { resolve(); }

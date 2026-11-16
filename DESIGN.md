@@ -213,6 +213,28 @@ Same tokens, scoped to a shadow root so the host page can't restyle it.
 | `.flash`, `.toast`            | Lifted       | Accent-tinted cast: play green, pause peach, leave red |
 | `.icon-key` (minimize)        | Flat → lifts on hover | Small object, -1px travel                  |
 
+## Motion
+
+Three tokens, defined in `popup.html`, the badge stylesheet in `content.js`, and `docs/join.html` (same values everywhere):
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `--ease-out` | `cubic-bezier(0.23, 1, 0.32, 1)` | Anything entering or leaving: badge, cards, drawer popover, view swaps |
+| `--ease-drawer` | `cubic-bezier(0.32, 0.72, 0, 1)` | The popup's bottom emoji drawer |
+| `--press` | `transform .15s ease, box-shadow .25s ease` | The press physics above — never hand-type it |
+
+Rules:
+
+- **Entrances are 250ms or less** on `--ease-out`; hover and colour changes use plain `ease`; constant motion (chat messages) is `linear`. Never `ease-in`, never `scale(0)`.
+- **Name the properties.** No `transition: all`.
+- **Move with `transform`, show/hide with `opacity` + `visibility`** — not `bottom`/`height`, and not `display` (a transition can't start from `display: none`).
+- **Popovers grow from their trigger** (`transform-origin` at the control that opened them, from `scale(0.96)`).
+- **Enter fast, leave slowly.** The sync flash arrives in ~0.2s so the mark animating inside it is visible, and fades over 0.4s.
+- **Group entrances stagger 40–50ms** and never block input (`animation-fill-mode: backwards`, so no transform lingers).
+- **Hover lifts are mouse-only** on the website: `@media (hover: hover) and (pointer: fine)`.
+- **Reduced motion** drops movement but keeps feedback: fades stay, and loading indicators switch from spinning/sweeping to an opacity pulse.
+- **No backdrop blur over the video.** Badge surfaces are near-opaque instead; blurring live video costs a re-render every frame for almost no visible effect.
+
 ## The signature moment
 
 When the partner plays or pauses, the flash shows the **duet mark**: the logo's two halves clicking together. Pause = two bars slide in from either side; play = the triangle's top and bottom halves meet. Halves use the brand gradient (peach→coral, rose→violet), then a small "click" (scale 1→1.18→1) and a rose ring pulse. Timing: ~0.42s slide with a slight overshoot, click and ring start at ~0.3s. Reduced motion: the mark appears without movement.

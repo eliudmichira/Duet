@@ -743,7 +743,7 @@ function renderEmojiCategories() {
     if (recentEmojis.some(isAvatarCode)) cats.push("Recent");
     cats.push("Avatars");
   } else {
-    if (recentEmojis.length) cats.push("Recent");
+    if (recentEmojis.some((e) => !isAvatarCode(e))) cats.push("Recent");
     cats.push(...Object.keys(EMOJI_PACKS));
   }
   if (!cats.includes(currentEmojiPack)) currentEmojiPack = cats[0];
@@ -777,7 +777,9 @@ function renderEmojiGrid() {
   } else if (searchQuery) {
     list = allEmojis();
   } else if (currentEmojiPack === "Recent") {
-    list = recentEmojis;
+    // Recents hold avatars too; as a reaction an avatar would be sent as
+    // the literal text "av:NN".
+    list = recentEmojis.filter((e) => !isAvatarCode(e));
   } else {
     list = EMOJI_PACKS[currentEmojiPack] || [];
   }

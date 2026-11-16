@@ -18,9 +18,17 @@
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
+        animation-delay: 0s !important;      /* staggered entrances must not leave gaps */
         scroll-behavior: auto !important;
       }
+      /* Progress indicators still have to read as "working": swap their
+         movement (spin, shimmer sweep) for a gentle opacity pulse. */
+      .spinner,
+      .partner-card.pending .time-bar::after {
+        animation: reduced-pulse 1.2s ease-in-out infinite !important;
+      }
     }
+    @keyframes reduced-pulse { 50% { opacity: 0.35; } }
 
     /* Keyboard navigation — a thin violet ring on focus for any focusable
        element. Uses :focus-visible so mouse clicks don't trigger it.
@@ -33,6 +41,13 @@
     }
 
     :root {
+      /* Motion tokens (see DESIGN.md "Motion"). Entrances/exits use the
+         strong ease-out; the drawer has its own curve; --press is the
+         documented press physics (shadow lags position). */
+      --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);
+      --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+      --press: transform 0.15s ease, box-shadow 0.25s ease;
+
       --bg-0:    #08070d;
       --bg-1:    #0f0d18;
       --surface: rgba(255,255,255,0.04);
@@ -239,7 +254,6 @@
       letter-spacing: 0.04em;
       color: var(--muted);
       margin-bottom: 14px;
-      transition: all 0.3s;
       box-shadow: var(--lift-small), var(--emboss-rim-soft), var(--emboss-base-soft);
     }
     .dot {
@@ -247,7 +261,7 @@
       border-radius: 50%;
       background: var(--muted-2);
       box-shadow: 0 0 0 0 transparent;
-      transition: all 0.3s;
+      transition: background-color 0.3s ease, box-shadow 0.3s ease;
     }
     .dot.connected {
       background: var(--success);
@@ -347,7 +361,7 @@
       font-weight: 600;
       letter-spacing: 0.04em;
       padding: 9px;
-      transition: transform 0.15s ease, box-shadow 0.25s ease, background 0.2s;
+      transition: var(--press), background 0.2s;
       box-shadow: var(--lift-small), var(--emboss-rim-soft), var(--emboss-base-soft);
     }
     .copy-btn:hover {
@@ -387,7 +401,7 @@
       background: rgba(0,0,0,0.18);
       border: 1px solid var(--border);
       margin-bottom: 12px;
-      transition: all 0.3s;
+      transition: color 0.3s ease, border-color 0.3s ease;
       box-shadow: var(--recess);
     }
     .peer-hint.ready {
@@ -456,7 +470,7 @@
       font-weight: 700;
       letter-spacing: -0.005em;
       padding: 13px;
-      transition: transform 0.15s ease, box-shadow 0.25s ease, background 0.2s;
+      transition: var(--press), background 0.2s;
       position: relative;
       overflow: hidden;
     }
@@ -586,7 +600,7 @@
       text-align: center;
       outline: none;
       text-transform: uppercase;
-      transition: all 0.2s;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
       box-shadow: var(--recess);
     }
     input.code-input::placeholder {
@@ -616,11 +630,17 @@
     .msg.error   { background: rgba(255,107,122,0.08); border: 1px solid rgba(255,107,122,0.22); color: var(--danger);  display: block; }
     .msg.success { background: rgba(94,226,160,0.08);  border: 1px solid rgba(94,226,160,0.22);  color: var(--success); display: block; }
 
-    .panel {
-      display: none;
-      animation: fadeIn 0.25s ease;
-    }
+    .panel { display: none; }
     .panel.active { display: block; }
+    /* One entrance per view: plays on open and when Create/Join/Leave swaps
+       the view (display none → block restarts it). */
+    #view-connected, #view-disconnected { animation: fadeIn 0.25s var(--ease-out) backwards; }
+    /* Partner arrives: story, controls and chat rise in a short stagger
+       instead of popping in at once. Decorative — never blocks input. */
+    #together-row, #control-row, #chat-bar { animation: fadeIn 0.28s var(--ease-out) backwards; }
+    #together-row { animation-delay: 40ms; }
+    #control-row  { animation-delay: 90ms; }
+    #chat-bar     { animation-delay: 130ms; }
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(4px); }
       to   { opacity: 1; transform: translateY(0); }
@@ -679,7 +699,7 @@
       border-radius: var(--radius-sm);
       padding: 12px 13px;
       margin-bottom: 12px;
-      animation: fadeIn 0.3s ease;
+      animation: fadeIn 0.25s var(--ease-out) backwards;
       box-shadow: var(--recess);
     }
     .partner-head {
@@ -771,7 +791,7 @@
       background: linear-gradient(180deg, rgba(94,226,160,0.18) 0%, rgba(94,226,160,0.08) 100%);
       border: 1px solid rgba(94,226,160,0.28);
       color: var(--success);
-      transition: all 0.3s;
+      transition: color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
       letter-spacing: 0;
       box-shadow:
         0 2px 6px rgba(94,226,160,0.22),
@@ -823,7 +843,7 @@
       padding: 5px 11px;
       font-family: inherit; font-size: 11px; font-weight: 700;
       cursor: pointer;
-      transition: transform 0.15s ease, box-shadow 0.25s ease;
+      transition: var(--press);
       box-shadow:
         0 4px 10px rgba(255,200,154,0.40),
         inset 0 1px 0 rgba(255,255,255,0.45),
@@ -860,7 +880,7 @@
       font-size: 11.5px; font-weight: 600;
       padding: 9px 11px;
       display: flex; align-items: center; gap: 7px;
-      transition: transform 0.15s ease, box-shadow 0.25s ease, background 0.2s;
+      transition: var(--press), background 0.2s;
       white-space: nowrap;
       box-shadow:
         0 4px 12px rgba(255,200,154,0.18),
@@ -1021,18 +1041,27 @@
     /* ── Emoji Picker Drawer ──────────────────────── */
     .emoji-drawer {
       position: absolute;
-      bottom: -100%; left: 0; right: 0;
+      bottom: 0; left: 0; right: 0;
       height: 75%;
       background: linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 100%);
       border-top: 1px solid var(--border-strong);
       border-radius: 20px 20px 0 0;
       z-index: 100;
-      transition: bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      /* Slides on the compositor (transform), not by animating `bottom`.
+         visibility keeps the closed drawer out of the tab order; its delay
+         lets the slide-out finish first. */
+      transform: translateY(100%);
+      visibility: hidden;
+      transition: transform 0.35s var(--ease-drawer), visibility 0s 0.35s;
       display: flex;
       flex-direction: column;
       box-shadow: 0 -12px 32px rgba(0,0,0,0.6);
     }
-    .emoji-drawer.active { bottom: 0; }
+    .emoji-drawer.active {
+      transform: none;
+      visibility: visible;
+      transition: transform 0.35s var(--ease-drawer), visibility 0s;
+    }
     .emoji-drawer-header {
       padding: 14px 18px 10px;
       display: flex; align-items: center; justify-content: space-between;
@@ -1054,7 +1083,7 @@
       padding: 6px 12px;
       font-size: 11px; font-weight: 600; color: var(--muted);
       cursor: pointer; white-space: nowrap;
-      transition: all 0.2s;
+      transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
     }
     .emoji-cat-btn.active {
       background: var(--surface-2);
@@ -1102,14 +1131,18 @@
     /* Drawer backdrop — click anywhere outside the drawer to dismiss */
     .emoji-backdrop {
       position: absolute; inset: 0;
-      background: rgba(0,0,0,0.0);
+      background: rgba(0,0,0,0.45);
       z-index: 99;
-      display: none;
-      transition: background 0.25s;
+      /* opacity + visibility, not display: a transition can't start from
+         display:none, so the old fade never played. */
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.25s ease, visibility 0s 0.25s;
     }
     .emoji-backdrop.active {
-      display: block;
-      background: rgba(0,0,0,0.45);
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 0.25s ease, visibility 0s;
     }
 
     /* Search row */
@@ -1135,7 +1168,7 @@
       padding: 6px 12px;
       font-size: 11px; font-weight: 600; color: var(--muted);
       cursor: pointer;
-      transition: all 0.15s;
+      transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
     }
     .emoji-reset-chip:hover {
       color: var(--text);
@@ -1199,7 +1232,7 @@
       border: 1px solid var(--border);
       display: grid; place-items: center;
       cursor: pointer; font-size: 24px;
-      transition: all 0.2s;
+      transition: var(--press), border-color 0.2s ease;
       box-shadow: var(--lift-small), var(--emboss-rim-soft), var(--emboss-base-soft);
       overflow: hidden;
       padding: 0;
@@ -1232,7 +1265,7 @@
       border-color: var(--violet);
       box-shadow: 0 0 0 2px rgba(139,92,246,0.25), var(--lift-small), var(--emboss-rim-soft);
     }
-    .avatar-btn.just-set { animation: avatar-pop 0.45s cubic-bezier(.2,.7,.3,1.3); }
+    .avatar-btn.just-set { animation: avatar-pop 0.45s var(--ease-out); }
     @keyframes avatar-pulse {
       0%, 100% { box-shadow: var(--lift-small), var(--emboss-rim-soft), 0 0 0 0 rgba(139,92,246,0.4); }
       50%      { box-shadow: var(--lift-small), var(--emboss-rim-soft), 0 0 0 6px rgba(139,92,246,0.0); }
