@@ -1486,7 +1486,10 @@
     const loadRecents = () => new Promise((resolve) => {
       try {
         chrome.storage.local.get(["__duet_emoji_recents"], (data) => {
-          recentList = Array.isArray(data?.__duet_emoji_recents) ? data.__duet_emoji_recents.slice(0, 12) : [];
+          // The key is shared with the popup, which also stores recently
+          // picked avatars ("av:NN") there — those aren't reactions.
+          recentList = (Array.isArray(data?.__duet_emoji_recents) ? data.__duet_emoji_recents : [])
+            .filter((e) => typeof e === "string" && !isAvatarCode(e)).slice(0, 12);
           resolve();
         });
       } catch { resolve(); }
