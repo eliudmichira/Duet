@@ -27,31 +27,36 @@ $("create-btn").addEventListener("click", async () => {
   setConnectedState(res.roomCode, res.peerCount || 1);
 });
 
-$("join-btn").addEventListener("click", async () => {
+// Joining by code is the quiet path: one row under Create.
+$("join-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = $("join-btn");
+  if (btn.disabled) return;
   const code = $("join-code-input").value.trim().toUpperCase();
   if (code.length !== 6) {
     showMsg("main-msg", "error", "Room codes are exactly 6 characters.");
+    $("join-code-input").focus();
     return;
   }
 
-  setBtnLoading("join-btn", "Joining…");
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner" style="margin:0"></span>`;
   clearMsg("main-msg");
 
   let res;
   try { res = await chrome.runtime.sendMessage({ type: "JOIN_ROOM", roomCode: code }); } catch (e) {
     res = { error: "Extension not ready. Try again." };
   }
-  setBtnLabel("join-btn", "Join room");
+  btn.disabled = false;
+  btn.textContent = "→";
 
   if (res?.error) { showMsg("main-msg", "error", res.error); return; }
   setConnectedState(res.roomCode, 2);
 });
 
 $("join-code-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    if (e.isComposing || e.keyCode === 229) return;
-    $("join-btn").click();
-  }
+  // Enter mid-composition confirms the IME, it isn't a submit.
+  if (e.key === "Enter" && (e.isComposing || e.keyCode === 229)) e.preventDefault();
 });
 
 // ── Display name (persisted) ──────────────────────────────
@@ -62,17 +67,42 @@ $("join-code-input").addEventListener("keydown", (e) => {
     const res = await chrome.runtime.sendMessage({ type: "GET_NAME" });
     if (res?.name) nameInput.value = res.name;
   } catch {}
+  renderMeSummary();
   let saveTimer = null;
   const persist = () => {
     const v = nameInput.value.trim().slice(0, 32);
     chrome.runtime.sendMessage({ type: "SET_NAME", name: v }).catch(() => {});
   };
   nameInput.addEventListener("input", () => {
+    renderMeSummary();
     clearTimeout(saveTimer);
     saveTimer = setTimeout(persist, 350);
   });
+  nameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !(e.isComposing || e.keyCode === 229)) { persist(); setMeExpanded(false); }
+  });
   nameInput.addEventListener("blur", persist);
 })();
+// ── "You" row ──────────────────────────────────────────────
+// Collapsed to one line ("You · [avatar] Alex ✎"); expands to the avatar row
+// and name field on tap, and on first run (no name, no avatar yet).
+function renderMeSummary() {
+  const name = $("name-input").value.trim();
+  const nameEl = $("me-name");
+  nameEl.textContent = name || "Add your name";
+  nameEl.classList.toggle("is-empty", !name);
+  renderAvatarInto($("me-avatar"), selectedAvatar);
+}
+function setMeExpanded(open) {
+  $("me-editor").hidden = !open;
+  $("me-summary").setAttribute("aria-expanded", String(open));
+}
+$("me-summary").addEventListener("click", () => {
+  const open = $("me-editor").hidden;
+  setMeExpanded(open);
+  if (open) setTimeout(() => $("name-input").focus(), 0);
+});
+
 // Pasting a whole invite link into the code box should just work; the
 // field's maxlength would otherwise keep only "HTTPS:".
 $("join-code-input").addEventListener("paste", (e) => {
@@ -118,52 +148,166 @@ function wireCopyButton(id, label, getText) {
 wireCopyButton("copy-link-btn", "Copy invite link", () => DUET_INVITE.link(currentRoomCode));
 wireCopyButton("copy-code-btn", "Copy code only", () => currentRoomCode);
 
-// ── Catch up to partner ────────────────────────────────────
-function syncMeBtnLabel() {
-  const name = (partnerMeta && typeof partnerMeta.name === "string" && partnerMeta.name.trim())
-    ? partnerMeta.name.trim()
-    : "";
-  return name ? `Catch up to ${name}` : "Catch up to partner";
+// ── Go to / Bring partner here ─────────────────────────────
+// One name per action: "Go to Sam" moves you; "Bring Sam here" moves them.
+function partnerFirstName() {
+  return (partnerMeta && typeof partnerMeta.name === "string" && partnerMeta.name.trim()) || "";
 }
+const goLabel = () => `Go to ${partnerFirstName() || "partner"}`;
+const bringLabel = () => `Bring ${partnerFirstName() || "partner"} here`;
 function refreshSyncMeBtnLabel() {
-  const btn = $("sync-me-btn");
-  if (!btn || btn.disabled) return; // don't overwrite Catching up…/Caught up ✓
-  const label = btn.querySelector("span");
-  if (label) label.textContent = syncMeBtnLabel();
+  for (const [id, label] of [["sync-me-btn", goLabel], ["bring-btn", bringLabel]]) {
+    const btn = $(id);
+    if (btn && !btn.disabled) btn.querySelector("span").textContent = label();
+  }
+  renderReadyBtn();
 }
 
-$("sync-me-btn").addEventListener("click", async () => {
-  const btn = $("sync-me-btn");
+async function runSyncButton(id, type, busyText, okText, labelFn) {
+  const btn = $(id);
+  if (!btn || btn.disabled) return;
   const label = btn.querySelector("span");
   btn.disabled = true;
-  label.textContent = "Catching up…";
-
+  label.textContent = busyText;
+  clearMsg("main-msg");
   let res;
-  try { res = await chrome.runtime.sendMessage({ type: "CATCH_UP_TO_PARTNER" }); } catch (e) {
+  try { res = await chrome.runtime.sendMessage({ type }); } catch {
     res = { error: "Extension not ready. Try again." };
   }
-
-  // Only declare "Caught up ✓" when the background actually verified that
-  // your local video position now matches the partner's projected time
-  // (drift < 1s) AND playback state matches.
+  // Only claim success when the background verified the two positions match.
   if (res?.ok) {
     btn.classList.add("success");
-    label.textContent = "Caught up ✓";
-    setTimeout(() => {
-      btn.classList.remove("success");
-      btn.disabled = false;
-      label.textContent = syncMeBtnLabel();
-    }, 1800);
+    label.textContent = okText;
   } else if (typeof res?.drift === "number") {
-    btn.disabled = false;
-    label.textContent = syncMeBtnLabel();
     showMsg("main-msg", "warn", `Couldn't fully sync — off by ${res.drift.toFixed(1)}s. Try again.`);
   } else {
-    btn.disabled = false;
-    label.textContent = syncMeBtnLabel();
-    showMsg("main-msg", "error", res?.error || "Couldn't catch up.");
+    showMsg("main-msg", "error", res?.error || "Couldn't sync.");
   }
+  setTimeout(() => {
+    btn.classList.remove("success");
+    btn.disabled = false;
+    label.textContent = labelFn();
+  }, res?.ok ? 1800 : 0);
+}
+$("sync-me-btn").addEventListener("click", () => {
+  const who = partnerFirstName() || "partner";
+  runSyncButton("sync-me-btn", "CATCH_UP_TO_PARTNER", `Going to ${who}…`, `With ${who} ✓`, goLabel);
 });
+$("bring-btn").addEventListener("click", () => {
+  const who = partnerFirstName() || "partner";
+  runSyncButton("bring-btn", "SYNC_TO_ME", `Bringing ${who}…`, `${who} is with you ✓`, bringLabel);
+});
+
+// ── Ready check ────────────────────────────────────────────
+let readyInfo = { phase: "none" };
+function renderReadyBtn() {
+  const btn = $("ready-btn");
+  if (!btn) return;
+  const r = readyInfo || { phase: "none" };
+  const who = partnerFirstName();
+  btn.classList.toggle("is-waiting", r.phase === "asking" && r.byMe);
+  btn.disabled = r.phase === "go" || (r.phase === "asking" && r.meReady && !r.byMe);
+  btn.textContent =
+    r.phase === "go" ? "Starting — watch your video" :
+    r.phase === "asking" && r.byMe ? `Waiting for ${who || "partner"}… · Cancel` :
+    r.phase === "asking" && !r.meReady ? `${who || "Partner"} is ready — I'm ready too` :
+    r.phase === "asking" ? "Starting…" :
+    "Both ready? Count us in";
+}
+$("ready-btn").addEventListener("click", async () => {
+  const r = readyInfo || { phase: "none" };
+  let msg = null;
+  if (r.phase === "none") msg = { type: "READY_START" };
+  else if (r.phase === "asking" && r.byMe) msg = { type: "READY_ANSWER", ready: false };
+  else if (r.phase === "asking" && !r.meReady) msg = { type: "READY_ANSWER", ready: true };
+  if (!msg) return;
+  clearMsg("main-msg");
+  let res;
+  try { res = await chrome.runtime.sendMessage(msg); } catch { res = { error: "Extension not ready. Try again." }; }
+  if (res?.error) showMsg("main-msg", "error", res.error);
+});
+
+// ── Chat history ───────────────────────────────────────────
+function chatRow(item) {
+  const row = document.createElement("div");
+  row.className = `chat-row${item.mine ? " mine" : ""}`;
+  const who = document.createElement("span");
+  who.className = "chat-who";
+  who.textContent = item.mine ? "You" : (partnerFirstName() || "Partner");
+  const text = document.createElement("span");
+  text.textContent = item.text;
+  row.append(who, text);
+  return row;
+}
+function renderChatLog(items) {
+  const log = $("chat-log");
+  log.replaceChildren(...items.slice(-30).map(chatRow));
+  log.hidden = items.length === 0;
+  log.scrollTop = log.scrollHeight;
+}
+async function loadChatLog() {
+  try {
+    const res = await chrome.runtime.sendMessage({ type: "GET_CHAT" });
+    if (Array.isArray(res?.items)) renderChatLog(res.items);
+  } catch {}
+}
+
+// ── Saved rooms ────────────────────────────────────────────
+const PAIRS_SHOWN = 3;
+async function renderPairs() {
+  let pairs = {};
+  try { pairs = (await chrome.runtime.sendMessage({ type: "GET_PAIRS" }))?.pairs || {}; } catch {}
+  const entries = Object.entries(pairs)
+    .sort((a, b) => (b[1]?.lastAt || 0) - (a[1]?.lastAt || 0))
+    .slice(0, PAIRS_SHOWN);
+  const list = $("pairs-list");
+  list.replaceChildren();
+  for (const [code, p] of entries) {
+    const item = document.createElement("div");
+    item.className = "pair-item";
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "pair-open";
+    const av = document.createElement("span");
+    av.className = "pair-av";
+    renderAvatarInto(av, p?.emoji || "👤");
+    const text = document.createElement("span");
+    text.className = "pair-text";
+    text.textContent = p?.name ? `Watch with ${p.name}` : "Your saved room";
+    const codeEl = document.createElement("span");
+    codeEl.className = "pair-code";
+    codeEl.textContent = code;
+    open.append(av, text, codeEl);
+    open.title = `Rejoin room ${code} — same code every time`;
+    open.addEventListener("click", async () => {
+      open.disabled = true;
+      text.textContent = "Opening…";
+      clearMsg("main-msg");
+      let res;
+      try { res = await chrome.runtime.sendMessage({ type: "OPEN_PAIR", code }); } catch { res = { error: "Extension not ready. Try again." }; }
+      if (res?.error) {
+        open.disabled = false;
+        text.textContent = p?.name ? `Watch with ${p.name}` : "Your saved room";
+        showMsg("main-msg", "error", res.error);
+        return;
+      }
+      setConnectedState(res.roomCode, res.peerCount || 1);
+    });
+    const forget = document.createElement("button");
+    forget.type = "button";
+    forget.className = "pair-forget";
+    forget.textContent = "✕";
+    forget.title = "Forget this room";
+    forget.setAttribute("aria-label", `Forget ${p?.name ? `room with ${p.name}` : `room ${code}`}`);
+    forget.addEventListener("click", async () => {
+      try { await chrome.runtime.sendMessage({ type: "FORGET_PAIR", code }); } catch {}
+      renderPairs();
+    });
+    item.append(open, forget);
+    list.appendChild(item);
+  }
+  $("pairs").hidden = entries.length === 0;
+}
 
 // ── Reactions ──────────────────────────────────────────────
 async function sendReactionLocalAndRemote(payload) {
@@ -220,22 +364,31 @@ $("open-partner-url").addEventListener("click", async () => {
 function setConnectedState(roomCode, peerCount) {
   currentRoomCode = roomCode;
   renderCodeCells(roomCode);
+  setMeExpanded(false);
   $("view-disconnected").style.display = "none";
   $("view-connected").style.display = "block";
+  $("status").hidden = false;
+  $("footer").hidden = true; // room view needs the height
   $("status-dot").classList.add("connected");
   $("status-text").textContent = `Live · Room ${roomCode}`;
   updatePeerHint(peerCount);
+  loadChatLog();
 }
 
+// The start screen has no status pill: "Not connected" said nothing useful.
 function setDisconnectedState() {
   currentRoomCode = null;
   partnerMeta = null;
   myMeta = null;
+  readyInfo = { phase: "none" };
   renderCodeCells(null);
   $("view-disconnected").style.display = "block";
   $("view-connected").style.display = "none";
+  $("status").hidden = true;
+  $("footer").hidden = false;
   $("status-dot").classList.remove("connected");
-  $("status-text").textContent = "Not connected";
+  renderChatLog([]);
+  renderPairs();
 }
 
 function updatePeerHint(count) {
@@ -244,6 +397,8 @@ function updatePeerHint(count) {
   // collapses (status pill still shows the room) and the popup fits Chrome's
   // 600px height without scrolling. It comes back if they leave.
   $("room-card").hidden = count >= 2;
+  // With the partner here, the partner card and the "Live" pill say it all.
+  el.hidden = count >= 2;
   if (count >= 2) {
     // Once partner data lands, renderPartnerCard() will reflect "in sync".
     // Until then we just acknowledge they joined — don't overclaim.
@@ -473,7 +628,8 @@ function renderDiag(d) {
     pill.classList.add("warn");
     label.textContent = "Diagnostics · partner stale";
     link.classList.add("warn");
-    $("trouble-text").textContent = "Partner seems stuck — see details";
+    const who = (lastPartnerName() || "Your partner");
+    $("trouble-text").textContent = `${who}'s video tab isn't reporting — ask them to refresh it`;
   } else {
     label.textContent = "Diagnostics · healthy";
     $("trouble-text").textContent = "Having trouble?";
@@ -523,6 +679,10 @@ function renderDiag(d) {
   }
 }
 
+function lastPartnerName() {
+  return (partnerMeta && typeof partnerMeta.name === "string" && partnerMeta.name.trim()) || "";
+}
+
 function fmtAgo(sec) {
   if (sec === null || sec === undefined) return "—";
   if (sec < 1)   return "just now";
@@ -551,6 +711,17 @@ chrome.runtime.onMessage.addListener((msg) => {
     myMeta = msg.mine;
     renderPartnerCard();
     if (partnerMeta?.name !== prevName) renderStory();
+  } else if (msg.type === "POPUP_READY") {
+    readyInfo = msg.ready || { phase: "none" };
+    renderReadyBtn();
+  } else if (msg.type === "POPUP_CHAT") {
+    if (currentRoomCode && msg.item) {
+      const log = $("chat-log");
+      log.appendChild(chatRow(msg.item));
+      while (log.childElementCount > 30) log.firstElementChild.remove();
+      log.hidden = false;
+      log.scrollTop = log.scrollHeight;
+    }
   } else if (msg.type === "POPUP_TOGETHER") {
     togetherInfo = msg.together || { since: null, total: 0 };
     if (typeof msg.serverNow === "number") serverClockOffset = msg.serverNow - Date.now();
@@ -598,17 +769,20 @@ async function renderStory() {
   $("story-name").textContent = name || "your partner";
   let entry = null;
   try {
-    const { [STORY_KEY]: story } = await chrome.storage.local.get(STORY_KEY);
-    entry = story?.partners?.[name.toLowerCase() || "__unnamed"] || null;
+    // Saved rooms keep their tally under the room code, so renames don't
+    // reset it (see background.js storyTick).
+    const { [STORY_KEY]: story, __duet_pairs: pairs } = await chrome.storage.local.get([STORY_KEY, "__duet_pairs"]);
+    const key = currentRoomCode && pairs?.[currentRoomCode] ? `room:${currentRoomCode}` : (name.toLowerCase() || "__unnamed");
+    entry = story?.partners?.[key] || null;
   } catch {}
   const seconds = entry?.seconds || 0;
   const nights = entry?.days ? Object.keys(entry.days).length : 0;
   $("story-stats").textContent = seconds < 60
-    ? "Your story starts tonight — press play together."
+    ? "Your story starts tonight."
     : `${fmtStoryTime(seconds)} watched together · ${nights} ${nights === 1 ? "night" : "nights"}`;
 }
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes[STORY_KEY] && currentRoomCode) renderStory();
+  if (area === "local" && (changes[STORY_KEY] || changes.__duet_pairs) && currentRoomCode) renderStory();
 });
 
 // Tick the counter + drift every second while popup is open
@@ -849,9 +1023,7 @@ async function setAvatar(value, opts = {}) {
       btn.classList.add("just-set");
     }
   }
-  const logo = $("my-avatar-logo");
-  if (logo) renderAvatarInto(logo, selectedAvatar);
-  $("logo-mark")?.classList.toggle("has-avatar", !isReset);
+  renderAvatarInto($("me-avatar"), selectedAvatar);
   refreshAvatarBtnState();
   try {
     // SET_EMOJI with empty string clears server-side too. The field is named
@@ -913,7 +1085,6 @@ $("quick-avatars")?.addEventListener("click", (e) => {
 
 // Listeners
 $("avatar-picker-btn")?.addEventListener("click", () => openEmojiPicker("avatar"));
-$("logo-mark")?.addEventListener("click", () => openEmojiPicker("avatar"));
 $("open-emoji-picker-btn")?.addEventListener("click", () => openEmojiPicker("reaction"));
 $("emoji-drawer-close")?.addEventListener("click", closeEmojiPicker);
 $("emoji-backdrop")?.addEventListener("click", closeEmojiPicker);
@@ -956,6 +1127,8 @@ $("emoji-search")?.addEventListener("input", (e) => {
     } else {
       refreshAvatarBtnState(); // mark .is-default for the pulse hint
     }
+    // First run: open the editor so setting a name is the obvious first step.
+    if (!data.myName && !data.myEmoji) setMeExpanded(true);
   } catch {}
 
   try {
@@ -965,8 +1138,10 @@ $("emoji-search")?.addEventListener("input", (e) => {
       partnerMeta = status.partner;
       myMeta = status.mine;
       togetherInfo = status.together || { since: null, total: 0 };
+      readyInfo = status.ready || { phase: "none" };
       if (typeof status.serverNow === "number") serverClockOffset = status.serverNow - Date.now();
       renderPartnerCard();
+      renderReadyBtn();
       renderTogether();
       if (status.diag) renderDiag(status.diag);
       startTogetherTicker();

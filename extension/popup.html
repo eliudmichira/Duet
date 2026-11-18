@@ -572,6 +572,10 @@
     .trouble-link .chev { display: inline-block; transition: transform .2s; }
     .trouble-link[aria-expanded="true"] .chev { transform: rotate(90deg); }
     #trouble .diag { margin-top: 6px; }
+    /* Leave + help share one line at the bottom of the room view. */
+    .room-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
+    .room-foot .trouble-link { margin: 0; padding-left: 0; text-align: left; min-width: 0; }
+    .room-foot .btn-ghost { width: auto; flex-shrink: 0; margin-top: 0; padding: 8px 12px; }
 
     .invite-hint {
       margin-top: 10px;
@@ -619,7 +623,7 @@
       box-shadow: var(--recess);
     }
     input.code-input::placeholder {
-      color: var(--muted-2);
+      color: var(--muted);
       font-weight: 500;
       letter-spacing: 0.1em;
       text-indent: 0.1em;
@@ -879,9 +883,155 @@
         inset 0 -1px 2px rgba(0,0,0,0.10);
     }
 
-    /* ── Control row (sync + reactions) ─────────────── */
+
+    /* ── Placeholders: readable, not ghosted ────────── */
+    input::placeholder { color: var(--muted); opacity: 1; }
+
+    .status[hidden] { display: none; }
+
+    /* ── Who you are (compact row + editor) ─────────── */
+    .me { margin-bottom: 12px; }
+    .me-summary {
+      width: 100%;
+      display: flex; align-items: center; gap: 9px;
+      padding: 7px 12px 7px 10px;
+      background: rgba(0,0,0,0.18);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text);
+      font-family: inherit; font-size: 12.5px; font-weight: 600;
+      cursor: pointer; text-align: left;
+      box-shadow: var(--recess);
+      transition: border-color .2s ease, background-color .2s ease;
+    }
+    .me-summary:hover { border-color: var(--border-strong); background: rgba(255,255,255,0.04); }
+    .me-label { color: var(--muted); font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .me-avatar {
+      width: 26px; height: 26px; flex-shrink: 0;
+      border-radius: 50%; overflow: hidden;
+      display: grid; place-items: center; font-size: 15px;
+      background: rgba(255,255,255,0.06);
+    }
+    .me-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .me-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .me-name.is-empty { color: var(--muted); font-weight: 500; }
+    .me-edit { color: var(--muted); font-size: 13px; transition: transform .2s var(--ease-out), color .2s; }
+    .me-summary[aria-expanded="true"] .me-edit { color: var(--text); transform: rotate(-20deg); }
+    .me-editor { padding-top: 10px; }
+    .me-editor[hidden] { display: none; }
+    .me-fields { display: flex; gap: 10px; align-items: center; }
+    /* A name is prose, not a code: left-aligned, normal tracking. */
+    input.text-input {
+      flex: 1; min-width: 0;
+      background: rgba(0,0,0,0.25);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: inherit; font-size: 13.5px; font-weight: 600;
+      padding: 12px 14px;
+      outline: none;
+      box-shadow: var(--recess);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    }
+    input.text-input::placeholder { font-weight: 500; }
+    input.text-input:focus {
+      border-color: rgba(255,138,107,0.5);
+      box-shadow: 0 0 0 3px rgba(255,138,107,0.10);
+      background: rgba(255,255,255,0.06);
+    }
+
+    /* ── Join by code: one quiet row under Create ───── */
+    .join-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 12px;
+    }
+    .join-label { color: var(--muted); font-size: 12px; font-weight: 600; white-space: nowrap; }
+    input.code-input.code-input-sm {
+      flex: 1; min-width: 0;
+      font-size: 14px; letter-spacing: 0.24em; text-indent: 0.24em;
+      padding: 9px 8px;
+    }
+    input.code-input.code-input-sm::placeholder { font-size: 12px; letter-spacing: 0.18em; text-indent: 0.18em; text-transform: uppercase; color: var(--muted); }
+    .join-go {
+      flex-shrink: 0; width: 38px; height: 38px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.03) 100%);
+      color: var(--text); font-size: 16px; font-weight: 700; font-family: inherit;
+      cursor: pointer;
+      box-shadow: var(--lift-small), var(--emboss-rim-soft), var(--emboss-base-soft);
+      transition: var(--press), border-color .2s;
+    }
+    .join-go:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--border-strong); }
+    .join-go:active:not(:disabled) { transform: none; box-shadow: var(--recess); }
+    .join-go:disabled { opacity: .6; cursor: default; }
+
+    /* ── Saved rooms ────────────────────────────────── */
+    .pairs { margin-bottom: 12px; }
+    .pairs[hidden] { display: none; }
+    .pairs-label { color: var(--muted); font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
+    .pairs-list { display: flex; flex-direction: column; gap: 6px; }
+    .pair-item { position: relative; }
+    .pair-open {
+      width: 100%;
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 40px 7px 8px;
+      border: 1px solid var(--border); border-radius: 999px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
+      color: var(--text); font-family: inherit; font-size: 13px; font-weight: 700;
+      cursor: pointer; text-align: left;
+      box-shadow: var(--lift-small), var(--emboss-rim-soft), var(--emboss-base-soft);
+      transition: var(--press), border-color .2s;
+    }
+    .pair-open:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--border-strong); }
+    .pair-open:active:not(:disabled) { transform: none; box-shadow: var(--recess); }
+    .pair-open:disabled { opacity: .7; cursor: default; }
+    .pair-av { width: 26px; height: 26px; flex-shrink: 0; border-radius: 50%; overflow: hidden; display: grid; place-items: center; font-size: 15px; background: rgba(255,255,255,0.06); }
+    .pair-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .pair-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pair-code { color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; }
+    .pair-forget {
+      position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+      width: 26px; height: 26px; border-radius: 50%;
+      border: none; background: none; color: var(--muted);
+      font-size: 14px; cursor: pointer;
+      transition: color .2s, background-color .2s;
+    }
+    .pair-forget:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+
+    /* ── Connected controls ─────────────────────────── */
+    .btn-ready { padding: 11px; font-size: 12.5px; }
+    .btn-ready.is-waiting {
+      color: var(--text);
+      background: rgba(0,0,0,0.25);
+      border: 1px solid var(--border);
+      box-shadow: var(--recess);
+    }
+    .btn-ready.is-waiting:hover { transform: none; }
+    .sync-pair { display: flex; gap: 8px; }
+    .sync-pair .btn-icon { flex: 1; min-width: 0; justify-content: center; }
+    .sync-pair .btn-icon span { overflow: hidden; text-overflow: ellipsis; }
+
+    /* ── Chat history ───────────────────────────────── */
+    .chat-log {
+      display: flex; flex-direction: column; gap: 3px;
+      max-height: 60px; overflow-y: auto; overscroll-behavior: contain;
+      margin-bottom: 8px; padding: 7px 10px;
+      background: rgba(0,0,0,0.18);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 11.5px; line-height: 1.35;
+      box-shadow: var(--recess);
+      scrollbar-width: thin;
+    }
+    .chat-log[hidden] { display: none; }
+    .chat-row { overflow-wrap: anywhere; }
+    .chat-who { font-weight: 800; color: var(--peach); margin-right: 5px; }
+    .chat-row.mine .chat-who { color: #c4b5fd; }
+
+    /* ── Control row (ready, sync pair, reactions) ──── */
     .control-row {
-      display: flex; gap: 8px; align-items: stretch;
+      display: flex; flex-direction: column; gap: 8px; align-items: stretch;
       margin-bottom: 12px;
     }
     /* Embossed action — peach-tinted cast shadow echoes its icon color */
@@ -1298,31 +1448,6 @@
       100% { transform: scale(1); }
     }
 
-    /* ── Logo avatar inset ─────────────────────────────
-       When the user sets an avatar, we show it as a small circular portrait
-       *inside* the colorful conic ring — not covering it. The ring keeps
-       rotating and the avatar reads as a profile pic framed by it. */
-    #my-avatar-logo {
-      display: none;
-      position: absolute;
-      inset: 0;
-      z-index: 2;
-      border-radius: 50%;
-      overflow: hidden;
-      font-size: 20px;
-      place-items: center;
-      /* Ensure emojis/portraits are centered inside the ring */
-      transform: scale(0.85); 
-    }
-    #my-avatar-logo img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-      animation: none; /* don't inherit the logo's spin */
-    }
-    .logo-mark.has-avatar #my-avatar-logo { display: grid; }
-    .logo-mark.has-avatar svg { opacity: 0; pointer-events: none; }
 
     #open-emoji-picker-btn {
       font-size: 18px; color: var(--muted-2);
@@ -1354,7 +1479,6 @@
       <!-- Header -->
       <div class="header">
         <div class="logo-mark" id="logo-mark">
-          <div id="my-avatar-logo">👋</div>
           <svg viewBox="0 0 24 24" fill="none" style="position: absolute; inset: 0; margin: auto;">
             <defs>
               <linearGradient id="pp-bar-grad" x1="0" y1="0" x2="0" y2="1">
@@ -1379,9 +1503,9 @@
       </div>
 
       <!-- Status pill -->
-      <div class="status">
+      <div class="status" id="status" hidden>
         <div class="dot" id="status-dot"></div>
-        <span id="status-text">Not connected</span>
+        <span id="status-text"></span>
       </div>
 
       <!-- Connected View -->
@@ -1431,14 +1555,14 @@
           </div>
         </div>
 
-        <!-- Sync + reactions -->
+        <!-- Ready check, sync, reactions -->
         <div class="control-row" id="control-row" style="display:none">
-          <button class="btn-icon sync-btn" id="sync-me-btn" title="Snap partner to my exact timestamp" aria-label="Sync partner to my current timestamp">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M2 8a6 6 0 0 1 10.5-3.97V3a.75.75 0 0 1 1.5 0v3.25a.75.75 0 0 1-.75.75H10a.75.75 0 0 1 0-1.5h1.74A4.5 4.5 0 0 0 3.5 8a.75.75 0 0 1-1.5 0Zm12 0a.75.75 0 0 1 1.5 0 6 6 0 0 1-10.5 3.97V13a.75.75 0 0 1-1.5 0V9.75A.75.75 0 0 1 4.25 9H7.5a.75.75 0 0 1 0 1.5H5.76A4.5 4.5 0 0 0 14 8Z" fill="currentColor"/>
-            </svg>
-            <span>Sync partner to me</span>
-          </button>
+          <button class="btn btn-primary btn-ready" id="ready-btn" type="button">Both ready? Count us in</button>
+          <!-- One name per action: never a label that flips meaning. -->
+          <div class="sync-pair" role="group" aria-label="Get back in sync">
+            <button class="btn-icon" id="sync-me-btn" type="button" title="Jump your video to where your partner is"><span>Go to partner</span></button>
+            <button class="btn-icon" id="bring-btn" type="button" title="Move your partner's video to where you are"><span>Bring partner here</span></button>
+          </div>
           <div class="reactions" id="reactions-tray">
             <button data-emoji="❤️" aria-label="Send heart reaction">❤️</button>
             <button data-emoji="😂" aria-label="Send laughing reaction">😂</button>
@@ -1449,15 +1573,17 @@
         </div>
 
         <div class="chat-bar" id="chat-bar" style="display:none; margin-top: 12px; position: relative;">
-          <input type="text" id="chat-input" placeholder="Type a message to float on screen..." autocomplete="off" spellcheck="false" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 32px 10px 12px; color: var(--text); font-size: 12px; outline: none; transition: border 0.2s; box-shadow: var(--recess);" />
-          <div style="position: absolute; right: 10px; top: 10px; opacity: 0.5; pointer-events: none;">↵</div>
+          <div class="chat-log" id="chat-log" role="log" aria-label="Messages" hidden></div>
+          <input type="text" id="chat-input" aria-label="Message your partner" placeholder="Message — it floats across their video" autocomplete="off" spellcheck="false" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 32px 10px 12px; color: var(--text); font-size: 12px; outline: none; transition: border 0.2s; box-shadow: var(--recess);" />
+          <div style="position: absolute; right: 10px; bottom: 10px; opacity: 0.5; pointer-events: none;">↵</div>
         </div>
 
-        <button class="btn btn-ghost" id="leave-btn">Leave room</button>
-
-        <button class="trouble-link" id="trouble-link" type="button" aria-expanded="false" aria-controls="trouble">
-          <span id="trouble-text">Having trouble?</span> <span class="chev">›</span>
-        </button>
+        <div class="room-foot">
+          <button class="trouble-link" id="trouble-link" type="button" aria-expanded="false" aria-controls="trouble">
+            <span id="trouble-text">Having trouble?</span> <span class="chev">›</span>
+          </button>
+          <button class="btn btn-ghost" id="leave-btn">Leave room</button>
+        </div>
 
         <!-- Diagnostics — hidden until asked for (or something's wrong) -->
         <div id="trouble" hidden>
@@ -1507,32 +1633,47 @@
           <p>Send one link. Play, pause and seek stay in lockstep on both screens.</p>
         </div>
 
-        <!-- Quick-pick illustrated avatars — populated by JS so the URLs stay
-             in one place. The "More" chip opens the full drawer. -->
-        <div class="quick-avatars" id="quick-avatars" role="radiogroup" aria-label="Quick avatar pick"></div>
+        <!-- Saved rooms: one permanent room per partner (background.js
+             "Saved rooms"). Filled by popup.js; hidden when there are none. -->
+        <div class="pairs" id="pairs" hidden>
+          <div class="pairs-label">Your rooms</div>
+          <div class="pairs-list" id="pairs-list"></div>
+        </div>
 
-        <div class="input-wrap" style="margin-bottom: 14px; display: flex; gap: 10px; align-items: center;">
-          <div class="avatar-wrap">
-            <button class="avatar-btn" id="avatar-picker-btn" aria-label="Choose your avatar emoji">👋</button>
+        <!-- Who you are: one compact row; the full editor only on first run
+             or when tapped. -->
+        <div class="me" id="me">
+          <button class="me-summary" id="me-summary" type="button" aria-expanded="false" aria-controls="me-editor">
+            <span class="me-label">You</span>
+            <span class="me-avatar" id="me-avatar">👋</span>
+            <span class="me-name" id="me-name">Add your name</span>
+            <span class="me-edit" aria-hidden="true">✎</span>
+          </button>
+          <div class="me-editor" id="me-editor" hidden>
+            <div class="quick-avatars" id="quick-avatars" role="radiogroup" aria-label="Quick avatar pick"></div>
+            <div class="me-fields">
+              <div class="avatar-wrap">
+                <button class="avatar-btn" id="avatar-picker-btn" aria-label="Choose your avatar">👋</button>
+              </div>
+              <input type="text" class="text-input" id="name-input" maxlength="32" placeholder="Your name" aria-label="Your name" autocomplete="off" spellcheck="false" />
+            </div>
           </div>
-          <input type="text" class="code-input" id="name-input" maxlength="32" placeholder="Your name (optional)" autocomplete="off" spellcheck="false" style="text-transform: none; letter-spacing: 0; font-family: inherit; flex: 1;" />
         </div>
 
         <button class="btn btn-primary" id="create-btn">Create a room</button>
 
-        <div class="divider">or join</div>
-
-        <div class="input-wrap">
-          <input type="text" class="code-input" id="join-code-input" maxlength="6" placeholder="6-letter code" autocomplete="off" spellcheck="false" />
-        </div>
-        <button class="btn btn-secondary" id="join-btn">Join room</button>
+        <form class="join-row" id="join-form" novalidate>
+          <label class="join-label" for="join-code-input">Have a code?</label>
+          <input type="text" class="code-input code-input-sm" id="join-code-input" maxlength="6" placeholder="ABC123" autocomplete="off" spellcheck="false" />
+          <button type="submit" class="join-go" id="join-btn" aria-label="Join room">→</button>
+        </form>
 
         <div class="msg" id="main-msg"></div>
 
         <p class="invite-hint">Got an invite link? Just open it — no code needed.</p>
       </div>
 
-      <div class="footer">made for the <span>two of you</span></div>
+      <div class="footer" id="footer">made for the <span>two of you</span></div>
     </div>
 
   </div>

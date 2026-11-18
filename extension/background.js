@@ -50,6 +50,7 @@ let metaListenerOff = null;
 let togListenerOff = null;
 let reactionsListenerOff = null;
 let typingListenerOff = null;
+let readyListenerOff = null;
 
 let serverTimeOffset = 0;
 let partnerMeta = null;       // last meta we saw from the partner
@@ -158,7 +159,9 @@ function withTimeout(promise, ms, label) {
 }
 
 // ── Room Management ─────────────────────────────────────────
-async function createRoom() {
+// opts.code: re-open a saved room under its old code (a "permanent" room
+// whose node was cleaned up). Fails with code "taken" if someone else holds it.
+async function createRoom(opts = {}) {
   initFirebase();
   // Shared state (myUserId, refs) is only touched once a room is claimed, so a
   // failed create can't disturb a session that's already running.
@@ -168,11 +171,12 @@ async function createRoom() {
   // someone else's live room; on the (rare) clash, draw another code.
   let roomCode = null;
   try {
-    for (let attempt = 0; attempt < 5 && !roomCode; attempt++) {
-      const candidate = generateRoomCode();
+    const attempts = opts.code ? 1 : 5;
+    for (let attempt = 0; attempt < attempts && !roomCode; attempt++) {
+      const candidate = opts.code || generateRoomCode();
       const res = await withTimeout(db.ref(`rooms/${candidate}`).transaction((cur) => {
         if (cur !== null) return; // taken — abort
-        return {
+        const room = {
           state: {
             action: "pause", currentTime: 0, updatedBy: newUserId,
             serverTime: firebase.database.ServerValue.TIMESTAMP
@@ -181,6 +185,8 @@ async function createRoom() {
           created: firebase.database.ServerValue.TIMESTAMP,
           lastTouch: firebase.database.ServerValue.TIMESTAMP
         };
+        if (opts.code) room.paired = true;
+        return room;
       }, undefined, false), 12000, "Creating room");
       if (res.committed) roomCode = candidate;
     }
@@ -197,6 +203,7 @@ async function createRoom() {
   }
   if (!roomCode) {
     if (!currentRoom) disconnectFirebase();
+    if (opts.code) return { error: "That room code is in use.", code: "taken" };
     return { error: "Couldn't find a free room code. Try again." };
   }
   myUserId = newUserId;
@@ -342,9 +349,16 @@ async function leaveRoom() {
   // server just proved unreachable — the idle-room cleanup catches it later.
   if (leavingRoom && db && reachable) {
     try {
-      const presSnap = await withTimeout(db.ref(`presence/${leavingRoom}`).get(), 5000, "Checking room");
+      const [presSnap, pairedSnap] = await Promise.all([
+        withTimeout(db.ref(`presence/${leavingRoom}`).get(), 5000, "Checking room"),
+        withTimeout(db.ref(`rooms/${leavingRoom}/paired`).get(), 5000, "Checking room")
+      ]);
       const remaining = presSnap.exists() ? Object.keys(presSnap.val() || {}).length : 0;
-      if (remaining === 0 && leavingRoomRef) {
+      // A saved ("permanent") room outlives the session so the same pair can
+      // come back to the same code; only its live check-in goes.
+      if (remaining === 0 && leavingRoomRef && pairedSnap.val() === true) {
+        await withTimeout(leavingRoomRef.child("readycheck").remove(), 5000, "Leaving room").catch(() => {});
+      } else if (remaining === 0 && leavingRoomRef) {
         await withTimeout(leavingRoomRef.remove(), 5000, "Removing room").catch(() => {});
       }
     } catch {}
@@ -357,6 +371,10 @@ async function leaveRoom() {
   myLastTabInfo = null;
   lastPeerCount = 0;
   togetherInfo = { since: null, total: 0 };
+  readyCheck = null;
+  readyGoHandled = readyGoStarting = null;
+  chatLog = []; chatLoadedFor = null;
+  pairMarkedFor = null; lastPairWrite = 0; lastPairSig = "";
   diag.lastWriteOk    = { op: null, at: 0 };
   diag.lastWriteErr   = { op: null, at: 0, message: null, hint: null };
   diag.lastPartnerAt  = 0;
@@ -410,7 +428,10 @@ function attachListeners(roomCode) {
       .map(p => ({ userId: p[0], ...p[1] }))
       .sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
 
+    const prevPartner = partnerMeta;
     partnerMeta = partners[0] || null;
+    maybeFollowPartner(prevPartner, partnerMeta);
+    rememberPair().catch(() => {});
     if (partnerMeta) {
       diag.lastPartnerAt = Date.now();
       diag.partnerUserId = partnerMeta.userId;
@@ -440,15 +461,24 @@ function attachListeners(roomCode) {
     // Drop reactions that arrived from before we joined
     if (typeof r.ts !== "number" || serverNow() - r.ts > 8000) return;
     broadcastToVideoTabs({ type: "SHOW_REACTION", emoji: r.emoji });
+    if (isChatText(r.emoji)) appendChat({ mine: false, text: r.emoji }).catch(() => {});
   });
   reactionsListenerOff = () => reacts.off("child_added", reactsHandler);
+
+  // Ready check ("Both ready?" → 3-2-1 → play)
+  const rcRef = db.ref(`rooms/${roomCode}/readycheck`);
+  const rcHandler = rcRef.on("value", (snap) => {
+    readyCheck = snap.val();
+    onReadyCheckChange().catch(() => {});
+  });
+  readyListenerOff = () => rcRef.off("value", rcHandler);
 }
 
 function detachListeners() {
-  for (const off of [stateListenerOff, presenceListenerOff, metaListenerOff, togListenerOff, reactionsListenerOff, typingListenerOff]) {
+  for (const off of [stateListenerOff, presenceListenerOff, metaListenerOff, togListenerOff, reactionsListenerOff, typingListenerOff, readyListenerOff]) {
     try { off?.(); } catch {}
   }
-  stateListenerOff = presenceListenerOff = metaListenerOff = togListenerOff = reactionsListenerOff = typingListenerOff = null;
+  stateListenerOff = presenceListenerOff = metaListenerOff = togListenerOff = reactionsListenerOff = typingListenerOff = readyListenerOff = null;
 }
 
 // ── Peer-count transitions (auto-resync + together-timer) ──
@@ -461,6 +491,10 @@ function handlePeerCountChange(newCount) {
   // (only the *existing* user fires this; freshly-joined users had prev=0)
   if (prev === 1 && newCount === 2) {
     setTimeout(() => { syncToMe().catch(() => {}); }, 1200);
+  }
+  // A ready check can't complete with one person; drop it.
+  if (newCount < 2 && prev >= 2 && readyCheck) {
+    roomRef?.child("readycheck").remove().catch(() => {});
   }
 
   // Together timer: start when room first reaches 2; freeze when it drops below 2
@@ -574,6 +608,7 @@ async function pushReaction(emoji) {
     // serverNow(), so a skewed local clock can't make reactions look stale.
     await ref.set({ emoji, from: myUserId, ts: firebase.database.ServerValue.TIMESTAMP });
     recordOk("pushReaction");
+    if (isChatText(emoji)) appendChat({ mine: true, text: emoji }).catch(() => {});
     // Survives SW death: server removes it ~6s later regardless of our lifetime.
     setTimeout(() => ref.remove().catch(() => {}), 6000);
     // Self-prune anything older than 10s on every write so leaks can't pile up
@@ -649,8 +684,8 @@ async function validateRules() {
 // A small tally of time actually *watched* together — both playing the same
 // video — per partner, shown in the popup ("12h 30m watched together ·
 // 6 nights"). Lives in chrome.storage.local on this device only; nothing is
-// uploaded. Partners are keyed by display name (rooms and user ids are new
-// every session), so renaming starts a fresh tally.
+// uploaded. A saved room's tally is keyed by its code (`room:CODE`), so a
+// rename doesn't reset it; one-off rooms fall back to the display name.
 const STORY_KEY = "__duet_story";
 const STORY_TICK_MS = 15000;
 const STORY_MAX_PARTNERS = 20;
@@ -683,7 +718,8 @@ async function storyTick() {
 
   const { [STORY_KEY]: stored } = await chrome.storage.local.get(STORY_KEY);
   const story = stored && typeof stored === "object" && stored.partners ? stored : { v: 1, partners: {} };
-  const key = storyPartnerKey(partnerMeta);
+  const pairs = await getPairs();
+  const key = pairs[currentRoom] ? `room:${currentRoom}` : storyPartnerKey(partnerMeta);
   const entry = story.partners[key] || { seconds: 0, days: {} };
   entry.name = typeof partnerMeta.name === "string" ? partnerMeta.name.slice(0, 32) : "";
   entry.seconds = (entry.seconds || 0) + add;
@@ -961,6 +997,282 @@ async function openPartnerVideo(tabId = null) {
   return { ok: true };
 }
 
+// ── Ready check ("Both ready?" → 3-2-1 → play) ──────────────
+// rooms/<code>/readycheck = { id, by, at, ready: { uid: true }, go?, time? }.
+// Whoever asked waits for the other "ready", then writes `go` (a server-clock
+// instant ~3s out) and `time` (where to start). Both sides pause at `time`,
+// count down, and press play at `go` — no "3, 2, 1, go" over the phone.
+const READY_COUNTDOWN_MS = 3200;
+const READY_STALE_MS = 90000;
+let readyCheck = null;        // last value of rooms/<code>/readycheck
+let readyGoHandled = null;    // id whose countdown we've already dispatched
+let readyGoStarting = null;   // id we're writing `go` for (asker only)
+
+function readyView() {
+  const rc = readyCheck;
+  if (!rc || typeof rc.id !== "string") return { phase: "none" };
+  const ready = rc.ready && typeof rc.ready === "object" ? rc.ready : {};
+  return {
+    phase: typeof rc.go === "number" ? "go" : "asking",
+    id: rc.id,
+    byMe: rc.by === myUserId,
+    meReady: ready[myUserId] === true,
+    partnerReady: Object.keys(ready).some(uid => uid !== myUserId)
+  };
+}
+
+function broadcastReady() {
+  const view = readyView();
+  const msg = { type: "READY_STATE", ...view };
+  if (primaryTabId) sendToAllFrames(primaryTabId, msg).catch(() => {});
+  else broadcastToVideoTabs(msg);
+  chrome.runtime.sendMessage({ type: "POPUP_READY", ready: view }).catch(() => {});
+}
+
+async function onReadyCheckChange() {
+  const rc = readyCheck;
+  // An ask nobody answered (or a countdown that already ran) is noise.
+  if (rc && typeof rc.at === "number" && typeof rc.go !== "number" && serverNow() - rc.at > READY_STALE_MS) {
+    if (rc.by === myUserId) roomRef?.child("readycheck").remove().catch(() => {});
+    readyCheck = null;
+  }
+  broadcastReady();
+  const cur = readyCheck;
+  if (!cur || !roomRef) return;
+
+  if (typeof cur.go === "number") {
+    if (readyGoHandled === cur.id) return;
+    readyGoHandled = cur.id;
+    if (serverNow() - cur.go > 2000) return; // stale countdown from before we joined
+    const tabId = primaryTabId || (await locateVideoTab())?.tabId;
+    if (tabId) {
+      sendToAllFrames(tabId, {
+        type: "READY_GO", id: cur.id, go: cur.go, serverNow: serverNow(),
+        time: typeof cur.time === "number" ? cur.time : null,
+        leader: cur.by === myUserId
+      }).catch(() => {});
+    }
+    if (cur.by === myUserId) {
+      const id = cur.id;
+      setTimeout(() => {
+        roomRef?.child("readycheck").transaction(v => (v && v.id === id) ? null : undefined).catch(() => {});
+      }, Math.max(0, cur.go - serverNow()) + 3000);
+    }
+    return;
+  }
+
+  const view = readyView();
+  if (view.byMe && view.meReady && view.partnerReady && readyGoStarting !== cur.id) {
+    readyGoStarting = cur.id;
+    const located = await locateVideoTab();
+    let time = located ? located.hit.r.currentTime : myLastTabInfo?.currentTime;
+    if (typeof time !== "number" || !Number.isFinite(time) || time < 0 || time >= 86400) time = 0;
+    await roomRef.child("readycheck").update({ go: serverNow() + READY_COUNTDOWN_MS, time }).catch(() => {});
+  }
+}
+
+async function startReadyCheck() {
+  if (!roomRef || !myUserId) return { error: "Not in a room." };
+  if (lastPeerCount < 2) return { error: "Your partner isn't here yet." };
+  const located = await locateVideoTab();
+  if (!located) return { error: "Open your video first, then ask again." };
+  const id = Math.random().toString(36).slice(2, 10);
+  try {
+    await withTimeout(roomRef.child("readycheck").set({
+      id, by: myUserId, at: firebase.database.ServerValue.TIMESTAMP,
+      ready: { [myUserId]: true }
+    }), 8000, "Starting ready check");
+    return { ok: true, id };
+  } catch (err) {
+    recordErr("readycheck", err);
+    if (/PERMISSION_DENIED/i.test(err?.message || "")) {
+      return { error: "The sync server's rules are out of date — ready checks need the latest database rules." };
+    }
+    return { error: "Couldn't reach Duet's sync server. Try again." };
+  }
+}
+
+async function answerReadyCheck(ready) {
+  if (!roomRef || !myUserId) return { error: "Not in a room." };
+  const ref = roomRef.child("readycheck");
+  if (!ready) {
+    await ref.remove().catch(() => {});
+    return { ok: true };
+  }
+  if (!readyCheck?.id) return { error: "Nothing to answer — the check was cancelled." };
+  if (!(await locateVideoTab())) return { error: "Open your video first." };
+  await ref.child(`ready/${myUserId}`).set(true).catch(() => {});
+  return { ok: true };
+}
+
+// ── Follow to the next episode ─────────────────────────────
+// You were both on page A; the partner moved to page B on the same site
+// (autoplay, "next episode"). Offer to follow — the content script counts
+// down 5s with a "Stay here" escape, then asks for FOLLOW_GO.
+function maybeFollowPartner(prev, next) {
+  if (!prev || !next || prev.userId !== next.userId) return;
+  if (typeof prev.url !== "string" || typeof next.url !== "string") return;
+  if (urlsMatch(prev.url, next.url)) return;
+  if (!myLastTabInfo?.url || !urlsMatch(myLastTabInfo.url, prev.url)) return;
+  if (Date.now() - lastTabInfoTime > 15000 || !primaryTabId) return;
+  let a, b;
+  try { a = new URL(prev.url); b = new URL(next.url); } catch { return; }
+  if (!/^https?:$/.test(b.protocol) || a.hostname !== b.hostname) return;
+  // SPA sites update the URL before the title — don't show the old title.
+  const prevTitle = prev.videoTitle || prev.pageTitle || "";
+  const title = next.videoTitle || next.pageTitle || "";
+  sendToAllFrames(primaryTabId, {
+    type: "FOLLOW_PROMPT",
+    url: next.url,
+    title: title && title !== prevTitle ? title.slice(0, 120) : ""
+  }).catch(() => {});
+}
+
+async function followPartner(url, tabId) {
+  if (!partnerMeta?.url || !urlsMatch(partnerMeta.url, url)) {
+    return { error: "Your partner moved again — open the popup to catch up." };
+  }
+  return openPartnerVideo(tabId);
+}
+
+// ── Chat history ────────────────────────────────────────────
+// Text messages (not emoji reactions or buffering notices) for the current
+// room, newest last. Session storage: kept across service-worker restarts,
+// gone when the browser closes, never uploaded beyond the 6s relay.
+const CHAT_MAX = 50;
+const chatArea = chrome.storage.session || chrome.storage.local;
+let chatLog = [];
+let chatLoadedFor = null;
+const chatKey = (code) => `__duet_chat_${code}`;
+
+function isChatText(s) {
+  if (typeof s !== "string" || !s.trim()) return false;
+  if (/^⏳ Buffering/i.test(s)) return false;
+  if (s.length <= 8 && !/[A-Za-z0-9]/.test(s)) return false; // emoji reaction
+  return true;
+}
+async function loadChat() {
+  if (!currentRoom) return [];
+  if (chatLoadedFor !== currentRoom) {
+    const code = currentRoom;
+    let items = [];
+    try {
+      const got = await chatArea.get(chatKey(code));
+      if (Array.isArray(got?.[chatKey(code)])) items = got[chatKey(code)];
+    } catch {}
+    if (currentRoom !== code) return [];
+    chatLog = items.slice(-CHAT_MAX);
+    chatLoadedFor = code;
+  }
+  return chatLog;
+}
+async function appendChat(entry) {
+  const code = currentRoom;
+  if (!code) return;
+  await loadChat();
+  if (currentRoom !== code) return;
+  const item = { mine: !!entry.mine, text: String(entry.text).slice(0, 140), at: Date.now() };
+  chatLog = [...chatLog, item].slice(-CHAT_MAX);
+  try { await chatArea.set({ [chatKey(code)]: chatLog }); } catch {}
+  broadcastToVideoTabs({ type: "CHAT_APPEND", item });
+  chrome.runtime.sendMessage({ type: "POPUP_CHAT", item }).catch(() => {});
+}
+
+// ── Saved rooms (one permanent room per partner) ───────────
+// Once two people have met in a room, it's remembered here and flagged
+// `paired` in the DB, so it survives both leaving (90-day idle cleanup
+// instead of 7) and the popup can offer "Watch with Sam" next time.
+const PAIRS_KEY = "__duet_pairs";
+const PAIRS_MAX = 6;
+let pairMarkedFor = null;
+let lastPairWrite = 0;
+let lastPairSig = "";
+
+async function getPairs() {
+  try {
+    const { [PAIRS_KEY]: pairs } = await chrome.storage.local.get(PAIRS_KEY);
+    return pairs && typeof pairs === "object" ? pairs : {};
+  } catch { return {}; }
+}
+
+async function rememberPair() {
+  const code = currentRoom;
+  if (!code || lastPeerCount < 2 || !partnerMeta || !roomRef) return;
+  const name = typeof partnerMeta.name === "string" ? partnerMeta.name.trim().slice(0, 32) : "";
+  const emoji = typeof partnerMeta.emoji === "string" ? partnerMeta.emoji.slice(0, 16) : "";
+  // Meta arrives about once a second; only touch storage when something changed
+  // or the entry's "last used" is a minute old.
+  const sig = `${code}|${name}|${emoji}`;
+  if (sig === lastPairSig && Date.now() - lastPairWrite < 60000) return;
+  const pairs = await getPairs();
+  const existing = pairs[code];
+  if (existing && existing.name === name && existing.emoji === emoji && Date.now() - lastPairWrite < 60000) return;
+
+  if (!existing) {
+    // Same partner in a newer room: the newer room replaces the old entry,
+    // and their story moves with them.
+    for (const [c, p] of Object.entries(pairs)) {
+      if (c !== code && name && p?.name && p.name.toLowerCase() === name.toLowerCase()) delete pairs[c];
+    }
+    try {
+      const { __duet_story: story } = await chrome.storage.local.get("__duet_story");
+      const fromKey = storyPartnerKey(partnerMeta);
+      if (story?.partners?.[fromKey] && !story.partners[`room:${code}`]) {
+        story.partners[`room:${code}`] = story.partners[fromKey];
+        delete story.partners[fromKey];
+        await chrome.storage.local.set({ __duet_story: story });
+      }
+    } catch {}
+  }
+  pairs[code] = { name, emoji, lastAt: Date.now(), since: existing?.since || Date.now() };
+  const codes = Object.keys(pairs).sort((a, b) => (pairs[b].lastAt || 0) - (pairs[a].lastAt || 0));
+  for (const c of codes.slice(PAIRS_MAX)) delete pairs[c];
+  lastPairWrite = Date.now();
+  lastPairSig = sig;
+  try { await chrome.storage.local.set({ [PAIRS_KEY]: pairs }); } catch {}
+
+  if (pairMarkedFor !== code && currentRoom === code) {
+    pairMarkedFor = code;
+    roomRef.child("paired").set(true).catch(() => { pairMarkedFor = null; });
+  }
+}
+
+async function forgetPair(code) {
+  const pairs = await getPairs();
+  delete pairs[code];
+  try { await chrome.storage.local.set({ [PAIRS_KEY]: pairs }); } catch {}
+  return { ok: true };
+}
+
+// Re-enter a saved room. If it was cleaned up, recreate it under the same
+// code so the partner's "Watch with …" button still lands in the same place.
+async function openPairedRoom(code) {
+  code = String(code || "").toUpperCase().trim();
+  if (!/^[A-HJ-NP-Z2-9]{6}$/.test(code)) return { error: "That saved room has an invalid code." };
+  if (currentRoom === code) return { roomCode: code, myUserId, joined: true };
+  const res = await joinRoom(code, { leaveCurrent: true });
+  if (!res?.error || !/not found/i.test(res.error)) return res;
+  if (currentRoom) await leaveRoom();
+  const made = await createRoom({ code });
+  if (made.code === "taken") return joinRoom(code, { leaveCurrent: true }); // partner beat us to it
+  return made;
+}
+
+// ── Attach to tabs that were open before install/update ────
+// Chrome only injects content scripts into pages loaded *after* install, so
+// a tab you were already watching in had no Duet at all until refreshed
+// (the "Brave doesn't sync" report). Inject the same files now; the content
+// script's version guard stops double-injection and retires an orphan from
+// the previous version.
+async function injectIntoOpenTabs() {
+  const files = chrome.runtime.getManifest().content_scripts?.[0]?.js || [];
+  if (!files.length || !chrome.scripting?.executeScript) return;
+  const tabs = await chrome.tabs.query({ url: ["http://*/*", "https://*/*"] });
+  await Promise.all(tabs
+    .filter(t => t.id != null && !t.discarded && !DUET_INVITE.isInvitePage(t.url || ""))
+    .map(t => chrome.scripting.executeScript({ target: { tabId: t.id, allFrames: true }, files }).catch(() => {})));
+}
+
 // ── Message Router ──────────────────────────────────────────
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
@@ -1052,6 +1364,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           sendResponse(await catchUpToPartner());
           break;
 
+        case "READY_START":   sendResponse(await startReadyCheck()); break;
+        case "READY_ANSWER":  sendResponse(await answerReadyCheck(!!message.ready)); break;
+        case "GET_READY":     sendResponse(readyView()); break;
+        case "FOLLOW_GO":
+          sendResponse(await followPartner(message.url, _sender.tab?.id || null));
+          break;
+        case "GET_CHAT":      sendResponse({ items: await loadChat() }); break;
+        case "GET_PAIRS":     sendResponse({ pairs: await getPairs() }); break;
+        case "OPEN_PAIR":     sendResponse(await openPairedRoom(message.code)); break;
+        case "FORGET_PAIR":   sendResponse(await forgetPair(message.code)); break;
+
         case "OPEN_PARTNER_URL":
           sendResponse(await openPartnerVideo(message.here ? _sender.tab?.id : null));
           break;
@@ -1077,6 +1400,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             together: togetherInfo,
             serverNow: serverNow(),
             ping: lastPingMs,
+            ready: readyView(),
+            paired: !!(currentRoom && (await getPairs())[currentRoom]),
             diag
           });
           break;
@@ -1212,7 +1537,10 @@ async function reloadInviteTabs() {
   await Promise.all(tabs.map(t => chrome.tabs.reload(t.id).catch(() => {})));
 }
 chrome.runtime.onInstalled.addListener(({ reason }) => {
-  if (reason === "install" || reason === "update") reloadInviteTabs().catch(() => {});
+  if (reason === "install" || reason === "update") {
+    reloadInviteTabs().catch(() => {});
+    injectIntoOpenTabs().catch(() => {});
+  }
 });
 bootstrapQuietly();
 

@@ -487,7 +487,7 @@
       <ul>
         <li>Duet sends a small amount of session data through a developer-managed Firebase Realtime Database <strong>only when you are inside a room</strong>.</li>
         <li>That data is the minimum needed for sync: the URL and title of the page you're on, the current playback timestamp, your chosen display name, and any reactions or short messages you send to your partner.</li>
-        <li>Rooms auto-expire after <strong>7 days of inactivity</strong>. The database isn't logged, exported, analyzed, or shared with any third party.</li>
+        <li>Rooms auto-expire after <strong>7 days of inactivity</strong> (90 days for a room you've saved with a partner). The database isn't logged, exported, analyzed, or shared with any third party.</li>
         <li>There are <strong>no analytics SDKs, no advertising SDKs, and no telemetry</strong>.</li>
       </ul>
     </div>
@@ -548,7 +548,8 @@
       <ul>
         <li><strong>Presence records</strong> — deleted automatically when you close the tab or disconnect, typically within 60 seconds.</li>
         <li><strong>Reactions and chat messages</strong> — deleted automatically about 6 seconds after they're sent.</li>
-        <li><strong>Room state</strong> — retained while at least one partner is active. A scheduled cleanup job deletes rooms idle for 7 days, along with any associated presence records.</li>
+        <li><strong>Room state</strong> — retained while at least one partner is active. A scheduled cleanup job deletes rooms idle for 7 days, along with any associated presence records. A room two people have met in is saved so you can come back to the same code; it keeps its playback position, shared watch-time counter and a <code>paired</code> flag (never names or messages, which are removed when you leave) and is deleted after 90 idle days.</li>
+        <li><strong>Ready checks</strong> ("Both ready?") — a short-lived record of who pressed ready, removed a few seconds after the countdown or when cancelled.</li>
       </ul>
     </div>
     <p>The developer does not analyze, export, or sell the contents of the database. The data is read by Firebase's realtime infrastructure solely to deliver each side's events to the other side.</p>
@@ -563,9 +564,11 @@
         <li>The room code and user ID of your current session (so the extension can rejoin after a reload)</li>
         <li>The position of the floating badge on screen and whether you've minimized it</li>
         <li>A small diagnostic record of the last few writes (for debugging)</li>
-        <li>"Our story" totals: for each partner display name, how long the two of you played the same video at the same time, which days you did, and the last title — shown in the popup as e.g. "12h 30m watched together · 6 nights"</li>
+        <li>"Our story" totals: for each saved room (or partner display name), how long the two of you played the same video at the same time, which days you did, and the last title — shown in the popup as e.g. "12h 30m watched together · 6 nights"</li>
+        <li>Your saved rooms (up to 6): the room code, your partner's display name and avatar, and when you last used it — so the popup can offer "Watch with …"</li>
       </ul>
     </div>
+    <p>Inside <code>chrome.storage.session</code> (cleared when the browser closes): the text messages of your current room, so the chat history survives the extension restarting itself.</p>
     <p>These never leave your computer. They are removed when you uninstall the extension.</p>
   </section>
 

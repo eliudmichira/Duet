@@ -13,7 +13,8 @@ what data the extension touches, where it goes, and how long it lives.
 - That data is the minimum needed for sync: the URL and title of the page
   you're on, the current playback timestamp, your chosen display name, and
   any reactions or short messages you send to your partner.
-- Rooms auto-expire after 7 days of inactivity. The database isn't logged,
+- Rooms auto-expire after 7 days of inactivity (90 days for a room you've
+  saved with a partner). The database isn't logged,
   exported, analyzed, or shared with any third party.
 - There are no analytics SDKs, no advertising SDKs, and no telemetry.
 
@@ -53,7 +54,13 @@ Within the database, all data lives under the room code. Lifetime:
 - **Room state** (last-known playback position, partner metadata) is
   retained while at least one partner is active. A scheduled cleanup job
   deletes rooms that have been idle for 7 days, along with any associated
-  presence records.
+  presence records. A room two people have met in is saved so you can
+  come back to the same code; it keeps its playback position, shared
+  watch-time counter and a `paired` flag (never names or messages, which
+  are removed when you leave) and is deleted after 90 idle days.
+- **Ready checks** ("Both ready?") are a short-lived record of who
+  pressed ready; removed a few seconds after the countdown or when
+  cancelled.
 
 The developer does not analyze, export, or sell the contents of the
 database. The data is read by Firebase's realtime infrastructure solely
@@ -69,10 +76,17 @@ Inside your browser's `chrome.storage.local`:
 - The position of the floating badge on screen and whether you've
   minimized it
 - A small diagnostic record of the last few writes (for debugging)
-- "Our story" totals: for each partner display name, how long the two of
-  you played the same video at the same time, which days you did, and the
-  last title — shown in the popup as e.g. "12h 30m watched together ·
-  6 nights"
+- "Our story" totals: for each saved room (or partner display name), how
+  long the two of you played the same video at the same time, which days
+  you did, and the last title — shown in the popup as e.g. "12h 30m
+  watched together · 6 nights"
+- Your saved rooms (up to 6): the room code, your partner's display name
+  and avatar, and when you last used it — so the popup can offer
+  "Watch with …"
+
+Inside `chrome.storage.session` (cleared when the browser closes): the
+text messages of your current room, so the chat history survives the
+extension restarting itself.
 
 These never leave your computer. They are removed when you uninstall
 the extension.

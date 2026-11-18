@@ -2,8 +2,9 @@
 //  Duet — Scheduled Cleanup (Cloud Functions)
 // ============================================================
 //
-// Deletes rooms and presence records that haven't been touched in 7 days.
-// Keeps storage bounded so abandoned rooms can't accumulate forever.
+// Deletes rooms and presence records that haven't been touched in 7 days
+// (90 for saved "paired" rooms people come back to). Keeps storage bounded
+// so abandoned rooms can't accumulate forever.
 //
 // Deploy (rules first — the query below needs the `.indexOn: lastTouch`
 // index they define, or the server refuses to filter and the Admin SDK
@@ -20,7 +21,9 @@ const admin = require("firebase-admin");
 
 admin.initializeApp();
 
-const MAX_IDLE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_IDLE_MS = 7 * DAY_MS;               // one-off rooms
+const PAIRED_IDLE_MS = 90 * DAY_MS;           // saved rooms (`paired: true`)
 const BATCH = 500;                            // rooms fetched per query
 const MAX_BATCHES = 40;                       // ≤ 20k rooms per run
 
@@ -54,7 +57,9 @@ exports.cleanupIdleRooms = functions.pubsub
       snap.forEach((roomSnap) => {
         count++;
         cursor = { value: roomSnap.child("lastTouch").val(), key: roomSnap.key };
-        if (lastActivity(roomSnap.val() || {}) < cutoff) {
+        const room = roomSnap.val() || {};
+        const idleLimit = room.paired === true ? Date.now() - PAIRED_IDLE_MS : cutoff;
+        if (lastActivity(room) < idleLimit) {
           updates[`rooms/${roomSnap.key}`] = null;
           updates[`presence/${roomSnap.key}`] = null;
           deleted++;

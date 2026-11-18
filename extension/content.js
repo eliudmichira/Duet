@@ -3,8 +3,18 @@
 // ============================================================
 
 (function () {
-  if (window.__duetInjected) return;
-  window.__duetInjected = true;
+  // Keyed by version: the background re-injects this file into tabs that were
+  // open when Duet was installed or updated. Same version → already running.
+  // Older version → that copy is orphaned (its extension context is gone), so
+  // tell it to stand down and take over.
+  let DUET_BUILD = "?";
+  try { DUET_BUILD = chrome.runtime.getManifest().version; } catch {}
+  if (window.__duetInjected === DUET_BUILD) return;
+  if (window.__duetInjected) {
+    try { document.dispatchEvent(new CustomEvent("duet:superseded")); } catch {}
+    try { document.querySelectorAll("duet-ui").forEach(n => n.remove()); } catch {}
+  }
+  window.__duetInjected = DUET_BUILD;
 
   // Flip to true while developing if you need the verbose trace.
   const DEBUG = false;
@@ -133,9 +143,10 @@
     return "";
   }
 
-  function syncBtnDefaultLabel() {
-    return `Catch up to ${S.partnerName || "partner"}`;
-  }
+  // One name per action: "Go to Sam" moves YOU to them; "Bring Sam here"
+  // moves THEM to you. The labels never swap meaning.
+  function goToLabel() { return `Go to ${S.partnerName || "partner"}`; }
+  function bringLabel() { return `Bring ${S.partnerName || "partner"} here`; }
 
   // Persist a chosen emoji to the recents list shared with the popup picker
   // (so Recent stays consistent regardless of where you sent the reaction from).
@@ -150,9 +161,11 @@
     } catch {}
   }
   function refreshSyncBtnLabel() {
-    const btn = $ui("__pp_sync_btn");
-    if (!btn || btn.disabled) return; // don't clobber transient states
-    btn.textContent = syncBtnDefaultLabel();
+    const go = $ui("__pp_sync_btn");
+    if (go && !go.disabled) go.textContent = goToLabel(); // don't clobber transient states
+    const bring = $ui("__pp_bring_btn");
+    if (bring && !bring.disabled) bring.textContent = bringLabel();
+    renderReady();
   }
 
   // Returns true if the background is still reachable. If not, marks the page
@@ -220,6 +233,8 @@
     // Hide the UI — extension is gone, anything it claims is stale
     if (uiHost) uiHost.remove();
   }
+  // A newer copy of this script was injected (extension updated in place).
+  document.addEventListener("duet:superseded", () => { contextInvalid = true; teardown(); });
 
   // ── Video Detection ────────────────────────────────────────
   function scoreVideo(v) {
@@ -473,8 +488,10 @@
     // A catch-up the user asked for is "you → partner", not something the
     // partner did to you.
     const who = S.partnerName || "Partner";
-    showFlash(state.action, state.catchUp ? `Caught up to ${who}`
-      : state.force ? `${who} re-synced you` : null);
+    if (!state.quiet) {
+      showFlash(state.action, state.catchUp ? `Caught up to ${who}`
+        : state.force ? `${who} re-synced you` : null);
+    }
 
     expectedRemoteEvents = expected;
     if (expected.size === 0) {
@@ -903,6 +920,77 @@
     }
     .btn-ghost:hover { color: var(--text); }
 
+    /* Soft: lifted but quiet — the two "who moves" actions sit side by side. */
+    .pair { display: flex; gap: 6px; }
+    .btn-soft {
+      flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: 999px;
+      padding: 7px 8px;
+      font-weight: 700; font-size: 11.5px; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 100%);
+      box-shadow: var(--lift-small), var(--emboss-rim-soft), var(--emboss-base-soft);
+      transition: var(--press), border-color .2s;
+    }
+    .btn-soft:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(255,255,255,0.18); box-shadow: var(--lift-small-hi), var(--emboss-rim-soft), var(--emboss-base-soft); }
+    .btn-soft:active:not(:disabled) { transform: none; box-shadow: var(--recess); }
+    .btn-soft:disabled { opacity: .75; cursor: default; }
+    .btn-primary.is-waiting {
+      color: var(--text);
+      background: rgba(0,0,0,0.28);
+      box-shadow: var(--recess);
+    }
+
+    /* Chat history: recessed well, newest at the bottom. */
+    .log {
+      display: flex; flex-direction: column; gap: 3px;
+      max-height: 104px; overflow-y: auto; overscroll-behavior: contain;
+      padding: 6px 8px; border-radius: 10px;
+      background: rgba(0,0,0,0.22); box-shadow: var(--recess);
+      font-size: 11.5px; font-weight: 500; line-height: 1.35;
+      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent;
+    }
+    .log[hidden] { display: none; }
+    .log-row { overflow-wrap: anywhere; }
+    .log-who { font-weight: 800; color: var(--peach); margin-right: 5px; }
+    .log-row.mine .log-who { color: #c4b5fd; }
+
+    /* Ask card (ready check / follow): Lifted, above the badge. */
+    .ask {
+      position: relative; overflow: hidden;
+      width: 264px; padding: 10px 12px 12px;
+      pointer-events: auto;
+      background: var(--surface);
+      border: 1px solid var(--border); border-radius: 14px;
+      box-shadow: 0 10px 26px rgba(0,0,0,0.45), var(--emboss-rim-soft), var(--emboss-base);
+      opacity: 0; transform: translateY(6px) scale(0.97);
+      transition: opacity .2s var(--ease-out), transform .2s var(--ease-out);
+    }
+    .ask.is-visible { opacity: 1; transform: none; }
+    .ask-text { font-size: 12.5px; font-weight: 600; line-height: 1.35; margin-bottom: 9px; }
+    .ask-row { display: flex; gap: 6px; }
+    .ask-row .btn-primary { flex: 1; width: auto; }
+    .ask-progress {
+      position: absolute; left: 0; bottom: 0; height: 2px; width: 100%;
+      background: var(--peach); transform-origin: left;
+      animation: duet-drain linear forwards;
+    }
+    @keyframes duet-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+    /* 3-2-1: one big numeral at a time, centered over the video. */
+    .countdown {
+      position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      pointer-events: none;
+      transition: opacity .25s var(--ease-out);
+    }
+    .countdown.is-done { opacity: 0; }
+    .count-num {
+      display: block;
+      font-size: 120px; font-weight: 800; line-height: 1; color: #fff;
+      text-shadow: 0 6px 30px rgba(0,0,0,0.6), 0 0 40px rgba(255,138,107,0.45);
+      animation: duet-count .5s var(--ease-out) both;
+    }
+    @keyframes duet-count { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: none; } }
+
     /* Recessed tray, embossed keys (DESIGN.md "grid-of-buttons"). */
     .tray {
       display: flex; gap: 3px; padding: 3px;
@@ -1175,9 +1263,11 @@
         0% { opacity: 0; transform: translateX(-50%); } 8% { opacity: 1; transform: translateX(-50%); }
         92% { opacity: 1; transform: translateX(-50%); } 100% { opacity: 0; transform: translateX(-50%); }
       }
-      .badge, .flash, .toast, .puck, .key, .btn-primary, .icon-key, .drawer {
+      .badge, .flash, .toast, .puck, .key, .btn-primary, .btn-soft, .icon-key, .drawer, .ask {
         transition-duration: 0.05s !important;
       }
+      .ask { transform: none; }
+      @keyframes duet-count { from { opacity: 0; } to { opacity: 1; } }
       .drawer { transform: none; }
       .av.typing { animation: none; }
       .mark svg, .mark .half, .mark::after { animation: none !important; }
@@ -1422,8 +1512,15 @@
     // Controls (shown on hover / while typing).
     const controls = el("div", "controls", { id: "__pp_controls" });
 
-    const syncBtn = el("button", "btn-primary", { id: "__pp_sync_btn", type: "button", text: syncBtnDefaultLabel() });
+    const syncBtn = el("button", "btn-soft", { id: "__pp_sync_btn", type: "button", text: goToLabel(), title: "Jump your video to where your partner is" });
     syncBtn.addEventListener("click", onCatchUpClick);
+    const bringBtn = el("button", "btn-soft", { id: "__pp_bring_btn", type: "button", text: bringLabel(), title: "Move your partner's video to where you are" });
+    bringBtn.addEventListener("click", onBringClick);
+    const pair = el("div", "pair", { role: "group", "aria-label": "Get back in sync" });
+    pair.append(syncBtn, bringBtn);
+
+    const readyBtn = el("button", "btn-primary", { id: "__pp_ready_btn", type: "button", text: "Both ready? Count us in" });
+    readyBtn.addEventListener("click", onReadyClick);
 
     const tray = el("div", "tray", { role: "group", "aria-label": "Reactions" });
     for (const emoji of QUICK_REACTIONS) {
@@ -1442,7 +1539,9 @@
     });
     chat.append(chatInput, el("span", "hint", { text: "↵" }));
 
-    controls.append(syncBtn, tray, chat);
+    const log = el("div", "log", { id: "__pp_chat_log", role: "log", "aria-label": "Messages", hidden: "" });
+
+    controls.append(readyBtn, pair, tray, log, chat);
 
     // Emoji drawer.
     const drawer = el("div", "drawer", { id: "__pp_emoji_drawer" });
@@ -1489,8 +1588,8 @@
     }
     syncBtn.disabled = true;
     const who = S.partnerName || "partner";
-    syncBtn.textContent = "Catching up…";
-    showFlash("play", `Catching up to ${who}…`);
+    syncBtn.textContent = `Going to ${who}…`;
+    showFlash("play", `Going to ${who}…`);
     const res = await safeSend({ type: "CATCH_UP_TO_PARTNER" });
     // Only claim success when the background actually verified that local
     // playback matches partner's projected position. Drift > 1s gets a
@@ -1505,12 +1604,192 @@
       syncBtn.textContent = `Off by ${res.drift.toFixed(1)}s`;
       showFlash("pause", `Couldn't fully sync — off by ${res.drift.toFixed(1)}s.`);
     } else {
-      syncBtn.textContent = syncBtnDefaultLabel();
+      syncBtn.textContent = goToLabel();
     }
     setTimeout(() => {
       syncBtn.disabled = false;
-      syncBtn.textContent = syncBtnDefaultLabel();
+      syncBtn.textContent = goToLabel();
     }, 2200);
+  }
+
+  async function onBringClick() {
+    const btn = $ui("__pp_bring_btn");
+    if (!btn || btn.disabled) return;
+    const who = S.partnerName || "partner";
+    btn.disabled = true;
+    btn.textContent = `Bringing ${who}…`;
+    const res = await safeSend({ type: "SYNC_TO_ME" });
+    if (res?.ok) btn.textContent = `${who} is with you ✓`;
+    else if (res?.error) { btn.textContent = "Try again"; showFlash("pause", res.error); }
+    else btn.textContent = bringLabel();
+    setTimeout(() => { btn.disabled = false; btn.textContent = bringLabel(); }, 2200);
+  }
+
+  // ── Ready check + countdown ────────────────────────────────
+  let readyState = { phase: "none" };
+  async function onReadyClick() {
+    const btn = $ui("__pp_ready_btn");
+    if (!btn || btn.disabled) return;
+    const r = readyState;
+    let res;
+    if (r.phase === "asking" && r.byMe) res = await safeSend({ type: "READY_ANSWER", ready: false });
+    else if (r.phase === "asking" && !r.meReady) res = await safeSend({ type: "READY_ANSWER", ready: true });
+    else if (r.phase === "none") res = await safeSend({ type: "READY_START" });
+    if (res?.error) showFlash("pause", res.error);
+  }
+
+  function renderReady() {
+    const btn = $ui("__pp_ready_btn");
+    const r = readyState;
+    const who = S.partnerName || "your partner";
+    if (btn) {
+      btn.disabled = r.phase === "go" || (r.phase === "asking" && r.meReady && !r.byMe);
+      btn.classList.toggle("is-waiting", r.phase === "asking" && r.byMe);
+      btn.textContent =
+        r.phase === "go" ? "Starting…" :
+        r.phase === "asking" && r.byMe ? `Waiting for ${who}… · Cancel` :
+        r.phase === "asking" && !r.meReady ? `${S.partnerName || "Partner"} is ready — I'm ready` :
+        r.phase === "asking" ? "Starting…" :
+        "Both ready? Count us in";
+    }
+    // The partner's ask also needs to reach you when the controls are closed.
+    if (r.phase === "asking" && !r.byMe && !r.meReady) {
+      showAsk("__pp_ready_ask", `${S.partnerName || "Your partner"} is ready to press play.`, [
+        { label: "I'm ready", primary: true, onClick: () => safeSend({ type: "READY_ANSWER", ready: true }) },
+        { label: "Not yet", onClick: () => safeSend({ type: "READY_ANSWER", ready: false }) }
+      ]);
+    } else {
+      hideAsk("__pp_ready_ask");
+    }
+  }
+
+  // Small Lifted card above the badge with up to two actions.
+  function showAsk(id, text, actions, opts = {}) {
+    const overlay = ensureOverlay();
+    if (!overlay) return null;
+    let card = $ui(id);
+    if (!card) {
+      card = el("div", "ask", { id, role: "alertdialog", "aria-live": "polite" });
+      overlay.prepend(card);
+      requestAnimationFrame(() => card.classList.add("is-visible"));
+    }
+    const msg = el("div", "ask-text", { text });
+    const row = el("div", "ask-row");
+    for (const a of actions) {
+      const b = el("button", a.primary ? "btn-primary" : "btn-soft", { type: "button", text: a.label });
+      b.addEventListener("click", () => { hideAsk(id); a.onClick(); });
+      row.appendChild(b);
+    }
+    card.replaceChildren(msg, row);
+    if (opts.progressMs) {
+      const bar = el("div", "ask-progress");
+      bar.style.animationDuration = `${opts.progressMs}ms`;
+      card.appendChild(bar);
+    }
+    return card;
+  }
+  function hideAsk(id) {
+    const card = $ui(id);
+    if (!card) return;
+    card.classList.remove("is-visible");
+    setTimeout(() => card.remove(), 180);
+  }
+
+  // Pause both at the agreed spot, count 3-2-1, press play at the same
+  // server-clock instant. Every frame gets this: the one holding the video
+  // drives playback, the one owning the badge draws the countdown.
+  function runReadyGo(msg) {
+    const delay = Math.max(0, Math.min(10000, msg.go - msg.serverNow));
+    const startAt = Date.now() + delay;
+    if (!video) video = findVideo();
+    if (video && typeof msg.time === "number") {
+      endApplyingRemote();
+      S.isApplyingRemote = true;
+      expectedRemoteEvents = new Set();
+      if (!video.paused) { expectedRemoteEvents.add("pause"); try { video.pause(); } catch {} }
+      if (Math.abs(video.currentTime - msg.time) > 0.05) {
+        expectedRemoteEvents.add("seeked");
+        try { video.currentTime = msg.time; } catch {}
+      }
+      applySafetyTimer = setTimeout(endApplyingRemote, Math.min(2000, delay));
+      setTimeout(() => {
+        applySync({ action: "play", currentTime: msg.time, force: true, quiet: true }, null);
+        // The asker records the play in the room state (the partner's apply
+        // is a no-op — they're already playing at the same spot).
+        if (msg.leader) setTimeout(() => sendSync("play"), 900);
+      }, delay);
+    }
+    if (frameOwnsBadge) showCountdown(startAt);
+  }
+
+  function showCountdown(startAt) {
+    const layer = ensureUiRoot();
+    $ui("__pp_countdown")?.remove();
+    const node = el("div", "countdown", { id: "__pp_countdown", role: "status", "aria-live": "assertive" });
+    layer.appendChild(node);
+    const tick = () => {
+      if (!node.isConnected) return;
+      const left = startAt - Date.now();
+      const n = Math.ceil(left / 1000);
+      const label = left <= 0 ? "▶" : String(Math.min(3, n));
+      if (node.dataset.v !== label) {
+        node.dataset.v = label;
+        const num = el("span", "count-num", { text: label });
+        node.replaceChildren(num);
+      }
+      if (left <= -700) { node.classList.add("is-done"); setTimeout(() => node.remove(), 250); return; }
+      setTimeout(tick, Math.max(16, Math.min(200, (left % 1000) || 200)));
+    };
+    tick();
+  }
+
+  // ── Follow partner to the next episode ─────────────────────
+  let followTimer = null;
+  function showFollowPrompt(msg) {
+    clearTimeout(followTimer);
+    const who = S.partnerName || "Your partner";
+    const where = msg.title ? `“${msg.title}”` : "the next video";
+    const go = () => { clearTimeout(followTimer); hideAsk("__pp_follow"); safeSend({ type: "FOLLOW_GO", url: msg.url }).then(res => {
+      if (res?.error) showFlash("pause", res.error);
+    }); };
+    const card = showAsk("__pp_follow", `${who} moved on to ${where}. Following in 5s…`, [
+      { label: "Go now", primary: true, onClick: go },
+      { label: "Stay here", onClick: () => clearTimeout(followTimer) }
+    ], { progressMs: 5000 });
+    if (!card) return;
+    followTimer = setTimeout(go, 5000);
+  }
+
+  // ── Chat history ───────────────────────────────────────────
+  const CHAT_SHOWN = 30;
+  function chatRow(item) {
+    const row = el("div", `log-row${item.mine ? " mine" : ""}`);
+    row.append(
+      el("span", "log-who", { text: item.mine ? "You" : (S.partnerName || "Partner") }),
+      el("span", "log-text", { text: item.text })
+    );
+    return row;
+  }
+  function renderChatLog(items) {
+    const log = $ui("__pp_chat_log");
+    if (!log) return;
+    log.replaceChildren(...items.slice(-CHAT_SHOWN).map(chatRow));
+    log.hidden = items.length === 0;
+    log.scrollTop = log.scrollHeight;
+  }
+  function appendChatLog(item) {
+    const log = $ui("__pp_chat_log");
+    if (!log) return;
+    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 24;
+    log.appendChild(chatRow(item));
+    while (log.childElementCount > CHAT_SHOWN) log.firstElementChild.remove();
+    log.hidden = false;
+    if (atBottom) log.scrollTop = log.scrollHeight;
+  }
+  async function loadChatLog() {
+    if (!frameOwnsBadge) return;
+    const res = await safeSend({ type: "GET_CHAT" });
+    if (Array.isArray(res?.items)) renderChatLog(res.items);
   }
 
   // Tabbed categories + grid + Recent (shared with the popup picker via the
@@ -1738,7 +2017,7 @@
     if (!controls || preSyncPosition === null) return;
 
     $ui("__pp_undo_btn")?.remove();
-    const undoBtn = el("button", "btn-ghost", { id: "__pp_undo_btn", type: "button", text: "↩ Undo catch-up" });
+    const undoBtn = el("button", "btn-ghost", { id: "__pp_undo_btn", type: "button", text: "↩ Undo — back to where I was" });
     undoBtn.addEventListener("click", () => {
       if (!video) video = findVideo();
       if (video && preSyncPosition !== null) {
@@ -1749,8 +2028,8 @@
       preSyncPosition = null;
       preSyncTimestamp = null;
     });
-    const syncBtnEl = $ui("__pp_sync_btn");
-    if (syncBtnEl) syncBtnEl.after(undoBtn);
+    const pairEl = $ui("__pp_sync_btn")?.parentElement;
+    if (pairEl) pairEl.after(undoBtn);
     else controls.appendChild(undoBtn);
 
     // Auto-remove after 6 seconds
@@ -1964,10 +2243,16 @@
       if (nextConnected && !wasConnected) {
         logSyncEvent("CONNECT", {});
         startTabInfoTimer();
+        loadChatLog();
       }
       if (!nextConnected) {
         logSyncEvent("DISCONNECT", {});
         if (tabInfoTimer) { clearInterval(tabInfoTimer); tabInfoTimer = null; }
+        readyState = { phase: "none" };
+        hideAsk("__pp_ready_ask");
+        hideAsk("__pp_follow");
+        clearTimeout(followTimer);
+        renderChatLog([]);
       }
       if (nextConnected) sendTabInfo();
       // Toast on partner presence transitions (owner frame only — every
@@ -2038,6 +2323,17 @@
         paused: video.paused
       });
       return true;
+    } else if (message.type === "READY_STATE") {
+      readyState = message;
+      if (frameOwnsBadge) renderReady();
+    } else if (message.type === "READY_GO") {
+      readyState = { phase: "go", id: message.id };
+      if (frameOwnsBadge) renderReady();
+      runReadyGo(message);
+    } else if (message.type === "FOLLOW_PROMPT") {
+      if (frameOwnsBadge && S.connected) showFollowPrompt(message);
+    } else if (message.type === "CHAT_APPEND") {
+      if (frameOwnsBadge && message.item) appendChatLog(message.item);
     } else if (message.type === "TYPING_STATUS") {
       // Partner started or stopped typing
       const typing = !!message.typing;
@@ -2145,6 +2441,9 @@
           if (typeof status.ping === "number") setState({ lastPingMs: status.ping });
           startTabInfoTimer();
           sendTabInfo();
+          if (status.ready) readyState = status.ready;
+          // render() builds the badge on the next microtask; fill it after.
+          setTimeout(() => { if (frameOwnsBadge) { renderReady(); loadChatLog(); } }, 0);
         }
       });
     });

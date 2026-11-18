@@ -69,6 +69,20 @@
           "$userId": { ".validate": "$userId.length <= 32 && newData.isNumber()" }
         },
 
+        "readycheck": {
+          ".validate": "newData.hasChildren(['id','by','at'])",
+          "id":    { ".validate": "newData.isString() && newData.val().length <= 16" },
+          "by":    { ".validate": "newData.isString() && newData.val().length <= 32" },
+          "at":    { ".validate": "newData.isNumber()" },
+          "go":    { ".validate": "newData.isNumber()" },
+          "time":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 86400" },
+          "ready": {
+            "$userId": { ".validate": "$userId.length <= 32 && newData.val() === true" }
+          },
+          "$other": { ".validate": false }
+        },
+
+        "paired":    { ".validate": "newData.isBoolean()" },
         "host":      { ".validate": "newData.isString() && newData.val().length <= 32" },
         "created":   { ".validate": "newData.isNumber()" },
         "lastTouch": { ".validate": "newData.isNumber()" },
