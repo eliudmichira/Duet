@@ -10,3 +10,9 @@ Avatar portraits (vendor/avatars/)
   "Adventurer" by Lisa Wischofsky, via DiceBear (https://www.dicebear.com)
   Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
   Generated with @dicebear/core + @dicebear/collection 9.4.2 (MIT).
+
+Typeface (vendor/fonts/)
+  Allo 1.0.1 by Josh Puckett (https://github.com/joshpuckett/allo),
+  derived from Inter by Rasmus Andersson and The Inter Project Authors.
+  Licensed under the SIL Open Font License 1.1 — full text in
+  vendor/fonts/Allo-LICENSE.txt. Packaged via allo-font 1.0.1 (npm).

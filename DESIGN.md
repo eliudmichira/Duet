@@ -213,6 +213,25 @@ Same tokens, scoped to a shadow root so the host page can't restyle it.
 | `.flash`, `.toast`            | Lifted       | Accent-tinted cast: play green, pause peach, leave red |
 | `.icon-key` (minimize)        | Flat → lifts on hover | Small object, -1px travel                  |
 
+## Typography
+
+Three faces, each with one job:
+
+- **Allo** (`vendor/fonts/AlloVariableFriendly.woff2`, OFL) — all interface
+  text in the popup and the in-page badge. The "Friendly" variable cut:
+  weights 100–900, optical size follows font size, roundness fixed at 50,
+  which suits the soft-embossed surfaces. Bundled, never fetched. The badge
+  registers it from bytes as `"Duet Allo"` via the FontFace API (shadow roots
+  ignore `@font-face`, and bytes dodge a page's `font-src` CSP); if that fails
+  it falls back to the system UI font.
+- **Instrument Serif** (italic) — the voice: hero line, "You & Sam".
+- **JetBrains Mono** — codes and clocks: room code cells, timestamps.
+
+Use Allo's `tnum` (`font-variant-numeric: tabular-nums`) anywhere a number
+ticks (drift, timers, story totals) and `case` on all-caps labels. Keep
+letter-spacing off Allo text where its `->` → arrow ligature matters
+(browsers drop ligatures when letter-spacing is set).
+
 ## Motion
 
 Three tokens, defined in `popup.html`, the badge stylesheet in `content.js`, and `docs/join.html` (same values everywhere):
