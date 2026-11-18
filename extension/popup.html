@@ -6,8 +6,17 @@
   <title>Duet — watch together</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500;700&display=swap" />
   <style>
+    /* Allo — the UI typeface, bundled (vendor/fonts, see tools/vendor-assets.mjs).
+       The "Friendly" variable cut: every weight, optical size follows font size. */
+    @font-face {
+      font-family: "Allo Variable Friendly";
+      src: url("vendor/fonts/AlloVariableFriendly.woff2") format("woff2");
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: block; /* local file: no flash of the fallback */
+    }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     /* Respect users with vestibular sensitivity. Disables atmospheric drift,
@@ -111,7 +120,7 @@
       width: 340px;
       background: linear-gradient(180deg, #0c0a14 0%, var(--bg-0) 100%);
       color: var(--text);
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: "Allo Variable Friendly", system-ui, sans-serif;
       overflow-x: hidden;
       overflow-y: auto;
       scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
@@ -886,6 +895,11 @@
 
     /* ── Placeholders: readable, not ghosted ────────── */
     input::placeholder { color: var(--muted); opacity: 1; }
+
+    /* Allo extras: figures that don't jiggle as they tick; punctuation
+       raised to sit with capitals in the all-caps labels. */
+    .story-stats, .partner-time, .drift, .diag-row, .chat-log { font-variant-numeric: tabular-nums; }
+    .me-label, .pairs-label, .partner-label, .room-label, .logo-tag { font-feature-settings: "case" 1; }
 
     .status[hidden] { display: none; }
 

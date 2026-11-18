@@ -49,7 +49,7 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["vendor/twemoji/*.svg", "vendor/avatars/*.svg"],
+      "resources": ["vendor/twemoji/*.svg", "vendor/avatars/*.svg", "vendor/fonts/*.woff2"],
       "matches": ["<all_urls>"]
     }
   ],

@@ -1,7 +1,7 @@
 {
   "name": "duet-tools",
   "private": true,
-  "description": "Build-time helpers. `npm run vendor-assets` regenerates extension/vendor/{twemoji,avatars}.",
+  "description": "Build-time helpers. `npm run vendor-assets` regenerates extension/vendor/{twemoji,avatars,fonts}.",
   "type": "module",
   "scripts": {
     "vendor-assets": "node vendor-assets.mjs"
@@ -9,6 +9,7 @@
   "devDependencies": {
     "@dicebear/collection": "9.4.2",
     "@dicebear/core": "9.4.2",
-    "@twemoji/svg": "15.0.0"
+    "@twemoji/svg": "15.0.0",
+    "allo-font": "1.0.1"
   }
 }

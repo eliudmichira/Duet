@@ -5,7 +5,8 @@
 //   extension/vendor/avatars/av-NN.svg   — DiceBear "adventurer" portraits
 //   extension/vendor/twemoji/<cp>.svg    — only the emoji Duet's UI uses
 //   extension/vendor/twemoji-set.js      — which emoji are bundled
-//   extension/vendor/CREDITS.txt         — attribution (CC BY 4.0 artwork)
+//   extension/vendor/fonts/              — Allo (UI typeface) + its OFL licence
+//   extension/vendor/CREDITS.txt         — attribution (CC BY 4.0 artwork, OFL font)
 //
 // Usage:  cd tools && npm install && npm run vendor-assets
 //
@@ -91,6 +92,17 @@ writeFileSync(join(OUT, "twemoji-set.js"),
 globalThis.DUET_TWEMOJI = new Set(${JSON.stringify(uniq)});
 `);
 
+// ── Allo (UI typeface) ──────────────────────────────────────
+// The "Friendly" variable cut: every weight 100–900 plus optical size,
+// roundness fixed at 50 — about half the size of the full variable font.
+// Family name inside the file: "Allo Variable Friendly".
+const alloDir = dirname(require.resolve("allo-font/package.json"));
+const alloVersion = JSON.parse(readFileSync(join(alloDir, "package.json"), "utf8")).version;
+rmSync(join(OUT, "fonts"), { recursive: true, force: true });
+mkdirSync(join(OUT, "fonts"), { recursive: true });
+copyFileSync(join(alloDir, "fonts", "webfonts", "AlloVariableFriendly.woff2"), join(OUT, "fonts", "AlloVariableFriendly.woff2"));
+copyFileSync(join(alloDir, "LICENSE.txt"), join(OUT, "fonts", "Allo-LICENSE.txt"));
+
 writeFileSync(join(OUT, "CREDITS.txt"),
 `Third-party artwork bundled with Duet
 =====================================
@@ -104,7 +116,13 @@ Avatar portraits (vendor/avatars/)
   "Adventurer" by Lisa Wischofsky, via DiceBear (https://www.dicebear.com)
   Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
   Generated with @dicebear/core + @dicebear/collection 9.4.2 (MIT).
+
+Typeface (vendor/fonts/)
+  Allo ${alloVersion} by Josh Puckett (https://github.com/joshpuckett/allo),
+  derived from Inter by Rasmus Andersson and The Inter Project Authors.
+  Licensed under the SIL Open Font License 1.1 — full text in
+  vendor/fonts/Allo-LICENSE.txt. Packaged via allo-font ${alloVersion} (npm).
 `);
 
-console.log(`avatars: ${AVATARS.length}, twemoji: ${uniq.length} files` +
+console.log(`avatars: ${AVATARS.length}, twemoji: ${uniq.length} files, Allo ${alloVersion}` +
   (missing.length ? `, not in Twemoji (system emoji): ${missing.join(" ")}` : ""));

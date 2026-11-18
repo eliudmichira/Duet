@@ -768,7 +768,7 @@
       --ease-out:       cubic-bezier(0.23, 1, 0.32, 1);     /* entrances / exits */
       --ease-overshoot: cubic-bezier(0.3, 1.45, 0.5, 1);    /* the duet mark's click-in */
       --press: transform .15s ease, box-shadow .25s ease;   /* press physics: shadow lags position */
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+      font-family: "Duet Allo", -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       color: var(--text);
       font-size: 12px; line-height: 1.3; font-weight: 600; letter-spacing: 0.005em;
       -webkit-font-smoothing: antialiased;
@@ -859,6 +859,7 @@
       position: absolute; width: 1px; height: 1px; overflow: hidden;
       clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
     }
+    .status-text, .count-num, .log { font-variant-numeric: tabular-nums; }
     .status-text {
       flex: 1; min-width: 0;
       color: rgba(244,241,234,0.88);
@@ -1277,8 +1278,27 @@
   let uiHost = null;
   let uiRoot = null;
   let uiLayer = null;
+  // Allo, the UI typeface (vendor/fonts). Chrome ignores @font-face inside a
+  // shadow root, so register it on the document instead — from the bytes,
+  // not a URL, so a page's font-src CSP can't block it. The family name is
+  // Duet-specific so it can't collide with anything the page declares.
+  // Failing is fine: the badge falls back to the system UI font.
+  let badgeFontRequested = false;
+  function loadBadgeFont() {
+    if (badgeFontRequested) return;
+    badgeFontRequested = true;
+    const url = assetUrl("vendor/fonts/AlloVariableFriendly.woff2");
+    if (!url || typeof FontFace !== "function" || !document.fonts) return;
+    fetch(url)
+      .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+      .then(buf => new FontFace("Duet Allo", buf, { weight: "100 900", style: "normal" }).load())
+      .then(face => document.fonts.add(face))
+      .catch(() => {});
+  }
+
   function ensureUiRoot() {
     if (uiLayer) return uiLayer;
+    loadBadgeFont();
     uiHost = document.createElement("duet-ui");
     // Inline !important so page CSS (even `* { … }` resets) can't hide or
     // shift the host. Zero-size + fixed: children position against the viewport.
