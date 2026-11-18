@@ -849,12 +849,12 @@
     [data-health="good"] .av { --ring: rgba(94,226,160,0.80); }
     [data-health="warn"] .av { --ring: rgba(252,211,77,0.85); }
     [data-health="bad"]  .av { --ring: rgba(255,107,122,0.85); }
-    .has-face .dot { display: none; }
+    .badge.has-face .dot { display: none; }
     .av.typing { animation: duet-ring 1.2s ease-in-out infinite; }
     @keyframes duet-ring {
       50% { box-shadow: 0 0 0 3px var(--ring), 0 0 10px var(--ring); }
     }
-    .puck .av { width: 22px; height: 22px; }
+    .puck .av { width: 28px; height: 28px; }
     .sr-only {
       position: absolute; width: 1px; height: 1px; overflow: hidden;
       clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
@@ -1091,25 +1091,52 @@
     .grid .key { height: 34px; font-size: 18px; }
     .grid .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: 12px; padding: 12px 0; }
 
-    /* Minimized puck: small Lifted pill, same health echo. */
+    /* Minimized puck: refined circular floating token with health halo */
     .puck {
       --cast: var(--lift-small);
-      display: none; align-items: center; gap: 7px;
-      padding: 7px 12px 7px 10px;
+      display: none;
+      width: 40px; height: 40px;
+      padding: 0;
+      position: relative;
+      align-items: center; justify-content: center;
+      place-items: center;
       pointer-events: auto;
       background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      font-size: 13px;
-      cursor: grab; touch-action: none; user-select: none;
+      border: 1px solid var(--border-strong);
+      border-radius: 50%;
+      cursor: pointer; touch-action: none; user-select: none;
       box-shadow: var(--cast), var(--emboss-rim-soft), var(--emboss-base-soft);
-      transition: var(--press);
+      transition: transform 0.2s var(--ease-out), box-shadow 0.25s ease, border-color 0.2s ease;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
-    .puck.is-visible { display: inline-flex; }
-    .puck:hover { transform: translateY(-1px); }
-    .puck[data-health="good"] { --cast: 0 4px 14px rgba(94,226,160,0.25); }
-    .puck[data-health="warn"] { --cast: 0 4px 14px rgba(255,200,154,0.30); }
-    .puck[data-health="bad"]  { --cast: 0 4px 14px rgba(255,107,122,0.32); }
+    .puck.is-visible { display: flex; }
+    .puck:hover {
+      transform: scale(1.08) translateY(-1px);
+      border-color: rgba(255,255,255,0.28);
+      box-shadow: var(--cast), 0 0 0 1px rgba(255,255,255,0.18), var(--emboss-rim);
+    }
+    .puck:active {
+      transform: scale(0.95);
+    }
+    .puck[data-health="good"] { --cast: 0 4px 18px rgba(94,226,160,0.35); }
+    .puck[data-health="warn"] { --cast: 0 4px 18px rgba(252,211,77,0.38); }
+    .puck[data-health="bad"]  { --cast: 0 4px 18px rgba(255,107,122,0.42); }
+    .puck .av {
+      width: 28px; height: 28px;
+      font-size: 15px;
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px var(--ring);
+    }
+    .puck .dot {
+      display: block !important;
+      position: absolute;
+      bottom: 2px; right: 2px;
+      width: 9px; height: 9px;
+      border: 2px solid rgba(18, 16, 26, 0.98);
+      border-radius: 50%;
+      z-index: 2;
+    }
 
     /* Flash: Lifted card, accent-echo by action. */
     .flash {
