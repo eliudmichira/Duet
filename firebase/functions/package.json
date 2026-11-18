@@ -1,7 +1,7 @@
 {
   "name": "duet-functions",
   "description": "Scheduled cleanup for Duet's Realtime Database",
-  "engines": { "node": "20" },
+  "engines": { "node": "22" },
   "main": "index.js",
   "dependencies": {
     "firebase-admin": "^12.0.0",
