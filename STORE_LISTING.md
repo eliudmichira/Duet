@@ -91,13 +91,15 @@ For each, the disclosure should say:
 ## Required assets
 
 - ☐ Icon 128×128 (already in `extension/icons/icon128.png`)
-- ☐ At least one screenshot (up to 5), 1280×800 or 640×400. Suggested shots:
+- ☑ Screenshots and promo images: `store-assets/` (1280×800 ×5, small
+  tile 440×280, marquee 1400×560). Upload in numeric order.
+- (Original plan) At least one screenshot (up to 5), 1280×800 or 640×400. Suggested shots:
   1. The popup start screen ("Watch with Sam" saved room + Create a room)
   2. The popup in a room, partner card populated
   3. A video page with the Duet badge in the corner
   4. The "Both ready?" prompt / 3-2-1 countdown over the video
   5. The badge opened: chat history, reactions, Go to / Bring buttons
-- ☐ Small promo tile 440×280 — same color palette as the popup, simple typographic "Duet — watch together" composition
+- ☑ Small promo tile 440×280 — `store-assets/promo-small-440x280.png`
 
 ---
 
@@ -136,8 +138,9 @@ If rejected, the most common reasons for Duet specifically would be:
 - Permission justifications too vague — use the wording above verbatim.
 - Privacy policy missing or doesn't match the data the extension actually touches — `PRIVACY.md` already matches.
 - Single-purpose unclear — keep the single-purpose statement above as-is.
-- **Dynamically generated code** — `agent/sandbox-tester.js` runs generated
-  adapter code with `new Function(...)` and `iframe.eval(...)`. The Web Store
-  forbids executing code that isn't in the package, and its scanner flags
-  `eval`. `agent/adapter-runtime.js` already runs adapters as data; remove or
-  rewrite the sandbox tester's eval paths before submitting.
+- **Dynamically generated code** — resolved: nothing in the package
+  evaluates code strings. The agent's adapter tester checks generated
+  adapters as data (`agent/sandbox-tester.js`), the same way
+  `agent/adapter-runtime.js` runs them. Keep it that way: a single `eval`
+  or `new Function` (including in a vendored library) is enough to get
+  flagged.

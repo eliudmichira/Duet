@@ -988,6 +988,11 @@
     /* 3-2-1: one big numeral at a time, centered over the video. */
     .countdown {
       position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 168px; height: 168px; border-radius: 50%;
+      display: grid; place-items: center;
+      /* A dark disc so the numeral reads over any frame, bright or dark
+         (no backdrop blur: it would re-render every video frame). */
+      background: radial-gradient(circle, rgba(12,10,20,0.72) 0%, rgba(12,10,20,0.55) 62%, rgba(12,10,20,0) 72%);
       pointer-events: none;
       transition: opacity .25s var(--ease-out);
     }
