@@ -5,7 +5,7 @@
 //   extension/vendor/avatars/av-NN.svg   — DiceBear "adventurer" portraits
 //   extension/vendor/twemoji/<cp>.svg    — only the emoji Duet's UI uses
 //   extension/vendor/twemoji-set.js      — which emoji are bundled
-//   extension/vendor/fonts/              — Allo (UI typeface) + its OFL licence
+//   extension/vendor/fonts/, docs/fonts/ — Allo (UI typeface) + its OFL licence
 //   extension/vendor/CREDITS.txt         — attribution (CC BY 4.0 artwork, OFL font)
 //
 // Usage:  cd tools && npm install && npm run vendor-assets
@@ -102,6 +102,12 @@ rmSync(join(OUT, "fonts"), { recursive: true, force: true });
 mkdirSync(join(OUT, "fonts"), { recursive: true });
 copyFileSync(join(alloDir, "fonts", "webfonts", "AlloVariableFriendly.woff2"), join(OUT, "fonts", "AlloVariableFriendly.woff2"));
 copyFileSync(join(alloDir, "LICENSE.txt"), join(OUT, "fonts", "Allo-LICENSE.txt"));
+// The website (docs/, Firebase Hosting) uses the same file.
+const SITE_FONTS = join(HERE, "..", "docs", "fonts");
+rmSync(SITE_FONTS, { recursive: true, force: true });
+mkdirSync(SITE_FONTS, { recursive: true });
+copyFileSync(join(alloDir, "fonts", "webfonts", "AlloVariableFriendly.woff2"), join(SITE_FONTS, "AlloVariableFriendly.woff2"));
+copyFileSync(join(alloDir, "LICENSE.txt"), join(SITE_FONTS, "Allo-LICENSE.txt"));
 
 writeFileSync(join(OUT, "CREDITS.txt"),
 `Third-party artwork bundled with Duet

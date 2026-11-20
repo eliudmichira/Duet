@@ -252,6 +252,25 @@ async function loadChatLog() {
   } catch {}
 }
 
+// ── Badge hidden with ✕ on the active tab ──────────────────
+async function activeTabId() {
+  try { return (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0]?.id ?? null; } catch { return null; }
+}
+async function refreshShowBadge() {
+  const btn = $("show-badge-btn");
+  const tabId = currentRoomCode ? await activeTabId() : null;
+  let hidden = false;
+  if (tabId != null) {
+    try { hidden = !!(await chrome.tabs.sendMessage(tabId, { type: "BADGE_HIDDEN?" }))?.hidden; } catch {}
+  }
+  btn.hidden = !hidden;
+}
+$("show-badge-btn").addEventListener("click", async () => {
+  const tabId = await activeTabId();
+  if (tabId != null) chrome.tabs.sendMessage(tabId, { type: "SHOW_BADGE" }).catch(() => {});
+  $("show-badge-btn").hidden = true;
+});
+
 // ── Saved rooms ────────────────────────────────────────────
 const PAIRS_SHOWN = 3;
 async function renderPairs() {
@@ -373,6 +392,7 @@ function setConnectedState(roomCode, peerCount) {
   $("status-text").textContent = `Live · Room ${roomCode}`;
   updatePeerHint(peerCount);
   loadChatLog();
+  refreshShowBadge();
 }
 
 // The start screen has no status pill: "Not connected" said nothing useful.

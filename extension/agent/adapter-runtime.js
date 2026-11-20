@@ -3,7 +3,7 @@
 // ============================================================
 // Executes a GeneratedAdapter *as data*, without evaluating its code.
 //
-// MV3 forbids eval/new Function in content scripts (and AMO rejects them),
+// MV3 forbids evaluating code strings in content scripts (and AMO rejects it),
 // so the generated `adapter.code` string is kept only as a human-readable
 // artifact (test panel, registry). At runtime the content script calls
 // AdapterRuntime.findVideo(adapter), which interprets the adapter's

@@ -581,6 +581,15 @@
     .trouble-link .chev { display: inline-block; transition: transform .2s; }
     .trouble-link[aria-expanded="true"] .chev { transform: rotate(90deg); }
     #trouble .diag { margin-top: 6px; }
+    .show-badge {
+      display: block; width: 100%;
+      margin: 0 0 6px; padding: 8px 10px;
+      border: 1px dashed var(--border-strong); border-radius: var(--radius-sm);
+      background: none; color: var(--muted);
+      font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+      transition: color .2s, border-color .2s;
+    }
+    .show-badge:hover { color: var(--text); border-color: rgba(255,255,255,0.28); }
     /* Leave + help share one line at the bottom of the room view. */
     .room-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
     .room-foot .trouble-link { margin: 0; padding-left: 0; text-align: left; min-width: 0; }
@@ -1591,6 +1600,8 @@
           <input type="text" id="chat-input" aria-label="Message your partner" placeholder="Message — it floats across their video" autocomplete="off" spellcheck="false" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 32px 10px 12px; color: var(--text); font-size: 12px; outline: none; transition: border 0.2s; box-shadow: var(--recess);" />
           <div style="position: absolute; right: 10px; bottom: 10px; opacity: 0.5; pointer-events: none;">↵</div>
         </div>
+
+        <button class="show-badge" id="show-badge-btn" type="button" hidden>Duet is hidden on this tab — show it again</button>
 
         <div class="room-foot">
           <button class="trouble-link" id="trouble-link" type="button" aria-expanded="false" aria-controls="trouble">
