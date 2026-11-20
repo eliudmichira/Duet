@@ -7,8 +7,16 @@
   <meta name="description" content="Duet syncs play, pause, and seek between two browsers in real time. Watch together on any HTML5 video site — free, fast, and private." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500;700&display=swap" />
   <style>
+    /* Allo — the UI typeface (fonts/, copied by tools/vendor-assets.mjs). */
+    @font-face {
+      font-family: "Allo Variable Friendly";
+      src: url("/fonts/AlloVariableFriendly.woff2") format("woff2");
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: swap;
+    }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     @media (prefers-reduced-motion: reduce) {
@@ -81,7 +89,7 @@
     html { scroll-behavior: smooth; }
 
     body {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: "Allo Variable Friendly", system-ui, sans-serif;
       background: linear-gradient(180deg, #0c0a14 0%, var(--bg-0) 100%);
       color: var(--text);
       min-height: 100vh;
@@ -283,7 +291,7 @@
       gap: .5rem;
       padding: 13px 26px;
       border-radius: 999px;
-      font-family: 'Inter', sans-serif;
+      font-family: "Allo Variable Friendly", system-ui, sans-serif;
       font-size: .95rem;
       font-weight: 700;
       letter-spacing: -0.005em;

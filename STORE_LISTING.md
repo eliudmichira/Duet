@@ -19,23 +19,25 @@ Duet syncs play, pause, and seek between exactly two browsers in real time, so y
 
 **How it works**
 1. Install Duet on both browsers.
-2. One person clicks *Create a room* and shares the 6-character code.
-3. The other person types the code in.
+2. One person clicks *Create a room* and sends the invite link (or reads out the 6-character code).
+3. The other person opens the link. They're in.
 4. Both open the same video. Press play. You're in sync.
 
-That's it. No accounts, no logins, no setup beyond installing the extension.
+Next time, your room is saved: click *Watch with Sam* and you're back in the same room.
+
+No accounts, no logins, no setup beyond installing the extension.
 
 **Features**
-- Real-time play, pause, and seek sync
-- Drift correction across network latency
-- Floating draggable badge with chat + emoji reactions, right on top of the video
-- "Sync partner to me" button — snap them to your exact timestamp
-- Per-partner display name and avatar
+- Real-time play, pause, and seek sync, with drift correction
+- "Both ready?" — a 3-2-1 countdown that starts both videos at the same instant
+- Follows your partner to the next episode automatically (with a "Stay here" option)
+- "Go to Sam" / "Bring Sam here" — get back together in one click
+- A small badge on the video with chat, message history and emoji reactions — hide it with ✕ any time
+- Saved room per partner, and "Our story": how long you've watched together
 - Works on YouTube, Vimeo, and any site with an HTML5 `<video>` element
-- 100% local; uses only the Firebase database you configure
 
 **Privacy**
-Duet doesn't collect analytics. It doesn't include any ad SDKs. Sync traffic flows through a single hosted Firebase Realtime Database. Rooms auto-expire after 7 days. Full privacy policy on the GitHub repo.
+No analytics, no ad SDKs, no accounts. Sync traffic goes through one hosted database and only while you're in a room. Messages are deleted within seconds. Idle rooms are deleted after 7 days (90 for a saved room). Full privacy policy: https://pausepal-a4d71.web.app/privacy
 
 **Limits**
 - Strictly 2 people per room.
@@ -58,13 +60,13 @@ single-purpose of the extension. Use these answers verbatim.
 > Duet synchronizes play, pause, and seek events for two specific users watching the same video on any HTML5 video page, so they can watch in lockstep across two screens.
 
 ### `storage`
-> Used to persist the user's Firebase config, display name, current room code, and badge position across browser sessions. No data leaves the user's device from this storage.
+> Used to keep the user's display name and avatar, current room code, saved rooms, badge position, and a local "watched together" tally across browser sessions; session storage keeps the current room's chat history until the browser closes. None of this storage is uploaded.
 
 ### `tabs`
 > Used to identify which tab contains the active video player so that sync events from the Firebase realtime database are routed to the correct tab. Used only after the user has created or joined a room.
 
 ### `scripting`
-> Required by Manifest V3 to inject the sync logic into video pages and to dispatch events to the correct frame within a tab when the player lives in a cross-origin iframe (common on embed-based video sites).
+> Required by Manifest V3 to inject the sync logic into video pages: into tabs that were already open when Duet is installed or updated (so they sync without a refresh), and into the specific frame that holds the player when it lives in a cross-origin iframe (common on embed-based video sites).
 
 ### `webNavigation`
 > Required to enumerate frames within the active video tab so that sync messages reach the specific frame containing the `<video>` element. Many video sites embed their player inside a cross-origin iframe; without `webNavigation` the extension cannot route a play/pause message to that frame.
@@ -82,25 +84,28 @@ Tick these in the dashboard's "Privacy practices" tab:
 - ☑ User communications (chat messages and reactions typed into Duet, delivered only to the partner)
 
 For each, the disclosure should say:
-> Transmitted only while the user is actively inside a sync room, only to a developer-managed Firebase Realtime Database, and only for the purpose of delivering sync events to the user's partner. Not sold, not transferred to any third party, not analyzed or retained by the extension developer. Rooms auto-expire after 7 days of inactivity.
+> Transmitted only while the user is actively inside a sync room, only to a developer-managed Firebase Realtime Database, and only for the purpose of delivering sync events to the user's partner. Not sold, not transferred to any third party, not analyzed or retained by the extension developer. Messages are deleted about 6 seconds after delivery; names and page info are removed when the user leaves; idle rooms are deleted after 7 days (90 days for a room saved by its two members).
 
 ---
 
 ## Required assets
 
 - ☐ Icon 128×128 (already in `extension/icons/icon128.png`)
-- ☐ At least one screenshot, 1280×800 or 640×400. Suggested shots:
-  1. Popup showing Setup view with sample Firebase config pasted
-  2. Popup in connected state, with partner card populated
-  3. A video page (YouTube) with the floating Duet badge visible in the corner
-  4. The badge expanded, showing chat + reactions + sync button
+- ☐ At least one screenshot (up to 5), 1280×800 or 640×400. Suggested shots:
+  1. The popup start screen ("Watch with Sam" saved room + Create a room)
+  2. The popup in a room, partner card populated
+  3. A video page with the Duet badge in the corner
+  4. The "Both ready?" prompt / 3-2-1 countdown over the video
+  5. The badge opened: chat history, reactions, Go to / Bring buttons
 - ☐ Small promo tile 440×280 — same color palette as the popup, simple typographic "Duet — watch together" composition
 
 ---
 
 ## Privacy policy URL
-Host `PRIVACY.md` somewhere public (GitHub Pages on the repo is fine) and put the URL here. Example:
-> `https://<your-github-username>.github.io/duet/PRIVACY.html`
+`docs/privacy.html` is served by Firebase Hosting (`firebase deploy --only hosting`):
+> `https://pausepal-a4d71.web.app/privacy`
+
+Re-deploy hosting after any privacy change so the live page matches the extension.
 
 ---
 
@@ -131,3 +136,8 @@ If rejected, the most common reasons for Duet specifically would be:
 - Permission justifications too vague — use the wording above verbatim.
 - Privacy policy missing or doesn't match the data the extension actually touches — `PRIVACY.md` already matches.
 - Single-purpose unclear — keep the single-purpose statement above as-is.
+- **Dynamically generated code** — `agent/sandbox-tester.js` runs generated
+  adapter code with `new Function(...)` and `iframe.eval(...)`. The Web Store
+  forbids executing code that isn't in the package, and its scanner flags
+  `eval`. `agent/adapter-runtime.js` already runs adapters as data; remove or
+  rewrite the sandbox tester's eval paths before submitting.

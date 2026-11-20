@@ -885,6 +885,8 @@
       box-shadow: var(--lift-small), var(--emboss-rim-soft);
       transform: translateY(-1px);
     }
+    .icon-key.close { font-size: 16px; }
+    .icon-key.close:hover { color: var(--text); background: rgba(255,107,122,0.18); }
     .icon-key:active { transform: none; box-shadow: var(--recess); }
 
     .controls {
@@ -893,6 +895,12 @@
       border-top: 1px solid var(--border);
     }
     .badge.is-open .controls { display: flex; }
+    /* In the default bottom-right spot the badge grows upward, so open the
+       controls ABOVE the bar: the bar (and its − / × keys) stays under the
+       cursor instead of jumping away on hover. Once dragged, the badge is
+       pinned by its top edge and opens downward as before. */
+    .overlay:not(.is-placed) .badge { flex-direction: column-reverse; }
+    .overlay:not(.is-placed) .controls { border-top: none; border-bottom: 1px solid var(--border); }
 
     /* The one Lifted primary in the badge. Small object → -1px travel. */
     .btn-primary {
@@ -1397,6 +1405,7 @@
     overlay.style.left   = cx + "px";
     overlay.style.top    = cy + "px";
     overlay.style.alignItems = "flex-start";
+    overlay.classList.add("is-placed");
   }
   function restoreBadgePosition() {
     try {
@@ -1418,6 +1427,23 @@
   // The badge can collapse into a small "puck" that takes less screen space.
   // State is persisted so it survives reloads.
   let isMinimized = false;
+  // Per page, not saved: reloading the tab or opening the popup's
+  // "Show controls on this tab" brings the badge back.
+  let isDismissed = false;
+  function setDismissed(value) {
+    value = !!value;
+    if (isDismissed === value) return;
+    isDismissed = value;
+    if (value) {
+      $ui("__duet_badge")?.classList.remove("is-visible", "is-open");
+      $ui("__pp_emoji_drawer")?.classList.remove("is-open");
+      $ui("__pp_tray")?.classList.remove("is-visible");
+      showToast("__pp_hidden_toast", "system", [el("span", "", { text: "Duet hidden here — you're still in sync. Open Duet from the toolbar to bring it back." })], 4200);
+    } else {
+      render();
+    }
+  }
+
   function setMinimized(value) {
     if (isMinimized === value) return;
     isMinimized = !!value;
@@ -1429,7 +1455,7 @@
     const puck  = $ui("__pp_tray");
     if (!badge || !puck) return;
     badge.style.display = isMinimized ? "none" : "";
-    puck.classList.toggle("is-visible", isMinimized && S.connected);
+    puck.classList.toggle("is-visible", isMinimized && S.connected && !isDismissed);
   }
   // Re-clamp on viewport resize so the badge doesn't end up off-screen when
   // the window shrinks or rotates.
@@ -1526,7 +1552,12 @@
     const minBtn = el("button", "icon-key", { id: "__pp_min_btn", type: "button", title: "Minimize", "aria-label": "Minimize Duet", text: "−" });
     minBtn.addEventListener("click", (e) => { e.stopPropagation(); setMinimized(true); });
     minBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
-    topbar.appendChild(minBtn);
+    // ✕ hides Duet's controls on this page only; you stay in the room and
+    // sync, reactions and messages keep working. The popup brings it back.
+    const closeBtn = el("button", "icon-key close", { id: "__pp_close_btn", type: "button", title: "Hide on this page (you stay in the room)", "aria-label": "Hide Duet on this page", text: "×" });
+    closeBtn.addEventListener("click", (e) => { e.stopPropagation(); setDismissed(true); });
+    closeBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    topbar.append(minBtn, closeBtn);
     installBadgeDrag(topbar);
 
     // Controls (shown on hover / while typing).
@@ -1991,7 +2022,7 @@
     const badge = $ui("__duet_badge") || buildBadge(overlay);
     const puck = $ui("__pp_tray");
 
-    if (!S.connected) {
+    if (!S.connected || isDismissed) {
       badge.classList.remove("is-visible", "is-open");
       $ui("__pp_emoji_drawer")?.classList.remove("is-open");
       puck?.classList.remove("is-visible");
@@ -2343,6 +2374,10 @@
         paused: video.paused
       });
       return true;
+    } else if (message.type === "BADGE_HIDDEN?") {
+      if (frameOwnsBadge && S.connected) { sendResponse({ hidden: isDismissed }); return true; }
+    } else if (message.type === "SHOW_BADGE") {
+      if (S.connected) { setMinimized(false); setDismissed(false); }
     } else if (message.type === "READY_STATE") {
       readyState = message;
       if (frameOwnsBadge) renderReady();
