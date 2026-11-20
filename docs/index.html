@@ -3,11 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Duet — Watch videos together, in sync</title>
-  <meta name="description" content="Duet syncs play, pause, and seek between two browsers in real time. Watch together on any HTML5 video site — free, fast, and private." />
+  <title>Duet — Watch together, even apart</title>
+  <meta name="description" content="Duet keeps play, pause and seek in sync between two browsers. Watch together on any video site, with chat, reactions and a 3-2-1 start. Free, no accounts." />
+  <meta name="theme-color" content="#0c0a14" />
+  <link rel="icon" type="image/png" href="/img/favicon.png" />
+  <meta property="og:title" content="Duet — Watch together, even apart" />
+  <meta property="og:description" content="Play, pause and seek in lockstep — on any video site." />
+  <meta property="og:image" content="https://pausepal-a4d71.web.app/img/og.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500;700&display=swap" />
+  <link rel="preload" href="/fonts/AlloVariableFriendly.woff2" as="font" type="font/woff2" crossorigin />
   <style>
     /* Allo — the UI typeface (fonts/, copied by tools/vendor-assets.mjs). */
     @font-face {
@@ -17,565 +24,355 @@
       font-style: normal;
       font-display: swap;
     }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
-      }
-    }
-
-    :focus { outline: none; }
-    :focus-visible {
-      outline: 2px solid rgba(139, 92, 246, 0.55);
-      outline-offset: 2px;
-      border-radius: 8px;
-    }
-
-    ::selection {
-      background: rgba(244, 114, 182, 0.35);
-      color: var(--text);
-    }
-
+    /* Same tokens as the extension (DESIGN.md). */
     :root {
-      color-scheme: dark;
-      accent-color: #ff8a6b;
-      --scrollbar-thumb: rgba(255, 255, 255, 0.18);
-      --scrollbar-track: transparent;
-      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
-      scrollbar-width: thin;
-
-      --bg-0:    #08070d;
-      --bg-1:    #0f0d18;
-      --surface: rgba(255,255,255,0.04);
-      --surface-2: rgba(255,255,255,0.06);
-      --border:  rgba(255,255,255,0.08);
-      --border-strong: rgba(255,255,255,0.14);
-      --text:    #f4f1ea;
-      --muted:   #8a8597;
-      --muted-2: #5a5668;
-
-      --coral:   #ff8a6b;
-      --peach:   #ffc89a;
-      --violet:  #8b5cf6;
-      --indigo:  #6366f1;
-      --rose:    #f472b6;
+      --bg-0: #0c0a14;
+      --bg-1: #120e1f;
+      --text: #f4f1ea;
+      --muted: #a8a2b6;
+      --muted-2: #6f6982;
+      --peach: #ffc89a;
+      --coral: #ff8a6b;
+      --rose: #f472b6;
+      --violet: #a78bfa;
       --success: #5ee2a0;
-      --danger:  #ff6b7a;
-
-      --radius:    16px;
-      --radius-sm: 10px;
-
-      --emboss-rim:       inset 0 1px 0 rgba(255,255,255,0.45);
-      --emboss-rim-soft:  inset 0 1px 0 rgba(255,255,255,0.10);
-      --emboss-rim-faint: inset 0 1px 0 rgba(255,255,255,0.06);
-      --emboss-base:      inset 0 -2px 4px rgba(0,0,0,0.18);
-      --emboss-base-soft: inset 0 -1px 2px rgba(0,0,0,0.12);
-
-      --lift-primary:    0 8px 20px rgba(255,138,107,0.40);
-      --lift-primary-hi: 0 12px 28px rgba(255,138,107,0.50);
-      --lift-primary-lo: 0 3px 10px rgba(255,138,107,0.30);
-      --lift-neutral:    0 6px 16px rgba(0,0,0,0.35);
-      --lift-neutral-hi: 0 10px 22px rgba(0,0,0,0.45);
-      --lift-small:      0 3px 8px rgba(0,0,0,0.30);
-      --lift-small-hi:   0 6px 14px rgba(0,0,0,0.40);
-
+      --border: rgba(255,255,255,0.08);
+      --border-strong: rgba(255,255,255,0.14);
+      --surface: linear-gradient(180deg, rgba(32,29,44,0.92) 0%, rgba(18,16,26,0.94) 100%);
+      --emboss-rim: inset 0 1px 0 rgba(255,255,255,0.10);
+      --emboss-base: inset 0 -2px 4px rgba(0,0,0,0.18);
       --recess: inset 0 1px 2px rgba(0,0,0,0.35), inset 0 -1px 0 rgba(255,255,255,0.04);
+      --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+      --press: transform .15s ease, box-shadow .25s ease;
+      --gutter: clamp(20px, 5vw, 96px);
+      color-scheme: dark;
     }
 
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
-
     body {
-      font-family: "Allo Variable Friendly", system-ui, sans-serif;
-      background: linear-gradient(180deg, #0c0a14 0%, var(--bg-0) 100%);
-      color: var(--text);
       min-height: 100vh;
-      letter-spacing: -0.005em;
-      position: relative;
+      color: var(--text);
+      font-family: "Allo Variable Friendly", system-ui, sans-serif;
+      font-size: 17px; line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      /* The marquee's light: a rose glow up right, violet low left. */
+      background:
+        radial-gradient(1100px 700px at 88% -5%, rgba(244,114,182,0.16), transparent 62%),
+        radial-gradient(900px 700px at -10% 75%, rgba(167,139,250,0.12), transparent 60%),
+        linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 60%);
+      background-color: var(--bg-0);
       overflow-x: hidden;
     }
+    img { display: block; max-width: 100%; height: auto; }
+    a { color: inherit; }
+    :focus-visible { outline: 2px solid rgba(167,139,250,0.8); outline-offset: 3px; border-radius: 6px; }
 
-    /* Atmospheric background */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: -40%;
-      background:
-        radial-gradient(circle at 20% 15%, rgba(255,138,107,0.20), transparent 42%),
-        radial-gradient(circle at 85% 25%, rgba(139,92,246,0.22), transparent 45%),
-        radial-gradient(circle at 50% 95%, rgba(244,114,182,0.16), transparent 50%);
-      filter: blur(6px);
-      animation: drift 22s ease-in-out infinite alternate;
-      pointer-events: none;
-      z-index: 0;
-    }
-    body::after {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E");
-      pointer-events: none;
-      mix-blend-mode: overlay;
-      z-index: 0;
-    }
-    @keyframes drift {
-      0%   { transform: translate(0, 0) rotate(0deg); }
-      100% { transform: translate(-4%, 3%) rotate(8deg); }
-    }
-
-    /* ── Nav ── */
-    nav {
-      position: sticky; top: 0; z-index: 10;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 1rem 2rem;
-      border-bottom: 1px solid var(--border);
-      background: rgba(8,7,13,0.75);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      box-shadow: inset 0 -1px 0 rgba(255,255,255,0.04);
-    }
-
-    .nav-logo {
-      display: flex; align-items: center; gap: .65rem;
-      text-decoration: none;
-    }
-
-    .logo-mark {
-      position: relative;
-      width: 34px; height: 34px;
-      border-radius: 10px;
-      background: conic-gradient(
-        from 210deg,
-        #ffd9b3, var(--peach), var(--coral), var(--rose),
-        #c084fc, var(--violet), var(--indigo), #22d3ee,
-        var(--success), #ffd9b3
-      );
-      display: grid;
-      place-items: center;
-      box-shadow:
-        0 0 0 1px rgba(255,255,255,0.22) inset,
-        0 8px 24px rgba(255,138,107,0.35),
-        0 8px 24px rgba(244,114,182,0.30),
-        0 8px 28px rgba(139,92,246,0.32);
-      animation: rotate 14s linear infinite, logo-pulse 3.6s ease-in-out infinite;
-    }
-    .logo-mark::before {
-      content: '';
-      position: absolute; inset: 3px;
-      border-radius: 7px;
-      background:
-        radial-gradient(circle at 30% 25%, rgba(255,200,154,0.12), transparent 55%),
-        radial-gradient(circle at 75% 80%, rgba(139,92,246,0.14), transparent 55%),
-        linear-gradient(180deg, rgba(15,13,24,0.94), rgba(8,7,13,0.97));
-    }
-    .logo-mark svg {
-      position: relative; z-index: 1;
-      width: 13px; height: 13px;
-      filter: drop-shadow(0 0 6px rgba(255,200,154,0.4));
-    }
-    @keyframes rotate { to { transform: rotate(360deg); } }
-    @keyframes logo-pulse {
-      0%,100% {
-        box-shadow:
-          0 0 0 1px rgba(255,255,255,0.22) inset,
-          0 8px 24px rgba(255,138,107,0.35),
-          0 8px 24px rgba(244,114,182,0.30),
-          0 8px 28px rgba(139,92,246,0.32);
-      }
-      50% {
-        box-shadow:
-          0 0 0 1px rgba(255,255,255,0.30) inset,
-          0 10px 30px rgba(255,138,107,0.50),
-          0 10px 30px rgba(244,114,182,0.45),
-          0 12px 36px rgba(139,92,246,0.48);
-      }
-    }
-
-    .logo-text {
-      font-family: 'Instrument Serif', serif;
+    .serif { font-family: "Instrument Serif", serif; font-weight: 400; }
+    .grad {
       font-style: italic;
-      font-size: 1.3rem;
-      letter-spacing: -0.02em;
-      background: linear-gradient(135deg, var(--coral), var(--rose), var(--violet));
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
+      background: linear-gradient(110deg, var(--peach), var(--rose) 55%, var(--violet));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      padding-right: .08em; margin-right: -.08em;
     }
+    .wrap { width: 100%; max-width: 1320px; margin: 0 auto; padding: 0 var(--gutter); }
 
-    .nav-link {
-      font-size: .85rem;
-      font-weight: 500;
-      color: var(--muted);
-      text-decoration: none;
-      transition: color .2s;
-    }
-    .nav-link:hover { color: var(--text); }
+    /* ── Nav ──────────────────────────────────────── */
+    nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 28px; }
+    .brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; border-radius: 11px; }
+    .brand span { font-family: "Instrument Serif", serif; font-size: 28px; line-height: 1; }
+    .brand em { color: var(--rose); }
+    .nav-links { display: flex; align-items: center; gap: clamp(14px, 3vw, 30px); font-size: 15px; font-weight: 600; }
+    .nav-links a { text-decoration: none; color: var(--muted); transition: color .2s; }
+    .nav-links a:hover { color: var(--text); }
+    .nav-links .pill { color: var(--text); padding: 9px 16px; border-radius: 999px; border: 1px solid var(--border-strong);
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)); box-shadow: var(--emboss-rim); }
 
-    /* ── Hero ── */
-    .hero {
-      position: relative; z-index: 1;
-      text-align: center;
-      padding: 6rem 1.5rem 4rem;
-    }
-
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03));
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 5px 14px 5px 10px;
-      font-size: 10.5px;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 1.75rem;
-      box-shadow: var(--lift-small), var(--emboss-rim-soft), var(--emboss-base-soft);
-    }
-
-    .dot {
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      background: var(--success);
-      box-shadow: 0 0 10px var(--success), 0 0 0 3px rgba(94,226,160,0.12);
-      animation: pulse 2.4s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%,100% { box-shadow: 0 0 10px var(--success), 0 0 0 3px rgba(94,226,160,0.12); }
-      50%     { box-shadow: 0 0 14px var(--success), 0 0 0 6px rgba(94,226,160,0.04); }
-    }
-
-    .hero h1 {
-      font-family: 'Instrument Serif', serif;
-      font-style: italic;
-      font-size: clamp(2.4rem, 7vw, 4.5rem);
-      line-height: 1.08;
-      letter-spacing: -0.02em;
-      margin-bottom: 1.1rem;
-    }
-
-    .hero h1 em {
-      font-style: italic;
-      background: linear-gradient(110deg, var(--peach), var(--rose) 45%, var(--violet));
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-    }
-
-    .hero p {
-      color: var(--muted);
-      font-size: 1.05rem;
-      line-height: 1.65;
-      max-width: 500px;
-      margin: 0 auto 2.5rem;
-    }
-
-    .hero-actions {
-      display: flex;
-      gap: .85rem;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
-    /* ── Buttons — same 3D emboss as popup ── */
+    /* ── Buttons (soft-embossed pill) ─────────────── */
     .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: .5rem;
-      padding: 13px 26px;
-      border-radius: 999px;
-      font-family: "Allo Variable Friendly", system-ui, sans-serif;
-      font-size: .95rem;
-      font-weight: 700;
-      letter-spacing: -0.005em;
-      text-decoration: none;
-      transition: transform 0.15s ease, box-shadow 0.25s ease;
-      cursor: pointer;
-      border: none;
+      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+      padding: 16px 26px; border-radius: 999px; border: 0;
+      font: 700 16px/1 "Allo Variable Friendly", system-ui, sans-serif; text-decoration: none; cursor: pointer;
+      transition: var(--press);
     }
-
     .btn-primary {
       color: #14111c;
       background: linear-gradient(180deg, var(--peach) 0%, var(--coral) 50%, var(--rose) 100%);
-      box-shadow:
-        0 8px 20px rgba(255,138,107,0.40),
-        inset 0 1px 0 rgba(255,255,255,0.45),
-        inset 0 -2px 4px rgba(0,0,0,0.18);
+      box-shadow: 0 10px 28px rgba(255,138,107,0.38), inset 0 1px 0 rgba(255,255,255,0.5), var(--emboss-base);
     }
-    @media (hover: hover) and (pointer: fine) {
-      .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow:
-          0 12px 28px rgba(255,138,107,0.50),
-          inset 0 1px 0 rgba(255,255,255,0.55),
-          inset 0 -2px 4px rgba(0,0,0,0.18);
-      }
+    .btn-ghost { color: var(--text); background: transparent; border: 1px solid var(--border-strong); }
+    @media (hover: hover) {
+      .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 34px rgba(255,138,107,0.48), inset 0 1px 0 rgba(255,255,255,0.55), var(--emboss-base); }
+      .btn-ghost:hover { transform: translateY(-2px); background: rgba(255,255,255,0.04); }
     }
-    .btn-primary:active {
-      transform: translateY(0);
-      box-shadow:
-        0 3px 10px rgba(255,138,107,0.30),
-        inset 0 1px 0 rgba(255,255,255,0.30),
-        inset 0 -1px 2px rgba(0,0,0,0.12);
-    }
+    .btn:active { transform: none; }
 
-    .btn-secondary {
-      background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04));
-      border: 1px solid var(--border);
-      color: var(--text);
-      box-shadow:
-        0 6px 16px rgba(0,0,0,0.35),
-        inset 0 1px 0 rgba(255,255,255,0.10),
-        inset 0 -2px 4px rgba(0,0,0,0.20);
+    /* ── Hero ─────────────────────────────────────── */
+    .hero {
+      display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+      align-items: center; gap: clamp(32px, 5vw, 80px);
+      padding-top: clamp(48px, 9vh, 110px); padding-bottom: clamp(56px, 10vh, 120px);
     }
-    @media (hover: hover) and (pointer: fine) {
-      .btn-secondary:hover {
-        transform: translateY(-2px);
-        border-color: var(--border-strong);
-        box-shadow:
-          0 10px 22px rgba(0,0,0,0.45),
-          inset 0 1px 0 rgba(255,255,255,0.14),
-          inset 0 -2px 4px rgba(0,0,0,0.20);
-      }
-    }
+    .hero h1 { font-size: clamp(56px, 7.4vw, 104px); line-height: 1.0; letter-spacing: -0.01em; }
+    .hero .lede { margin-top: 26px; max-width: 30ch; font-size: clamp(18px, 1.6vw, 21px); color: var(--muted); }
+    .hero .actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 36px; }
+    .hero .fine { margin-top: 18px; font-size: 14px; color: var(--muted-2); }
 
-    /* ── How it works ── */
-    .section {
-      position: relative; z-index: 1;
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 0 1.5rem 6rem;
+    /* The "video" frame — the same scene as the store art, drawn in SVG so it
+       stays sharp; the badge is a real screenshot of the extension. */
+    .stage {
+      position: relative; aspect-ratio: 5 / 4;
+      border-radius: 22px; overflow: hidden;
+      box-shadow: 0 50px 100px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.08), 0 24px 80px rgba(244,114,182,0.14);
+      isolation: isolate;
+      container-type: inline-size;
     }
+    .stage svg.scene { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .stage .badge {
+      position: absolute; right: 3.5%; bottom: 4%; width: 31%; z-index: 2;
+      border-radius: 14px;
+      filter: drop-shadow(0 18px 30px rgba(0,0,0,0.5));
+    }
+    .bubble {
+      position: absolute; left: 0; top: 16%; z-index: 1;
+      display: inline-flex; align-items: baseline; gap: .55em;
+      padding: .3em .8em; border-radius: 6px;
+      background: rgba(0,0,0,0.42);
+      font-size: clamp(13px, 1.45vw, 20px); font-weight: 800; white-space: nowrap;
+      text-shadow: 0 2px 6px rgba(0,0,0,.6);
+      animation: slide 11s linear infinite;
+    }
+    .bubble b { font-size: .68em; letter-spacing: .06em; color: var(--peach); }
+    .bubble i { font-style: italic; }
+    @keyframes slide { from { transform: translateX(100cqw); } to { transform: translateX(-100%); } }
+    .twinkle { animation: twinkle 3.6s ease-in-out infinite; }
+    .twinkle:nth-child(2n) { animation-delay: -1.2s; } .twinkle:nth-child(3n) { animation-delay: -2.4s; }
+    @keyframes twinkle { 50% { opacity: .25; } }
+    .glow { transform-origin: 800px 560px; animation: breathe 7s ease-in-out infinite; }
+    @keyframes breathe { 50% { transform: scale(1.06); opacity: .9; } }
+    .dashes { animation: drive 1.4s linear infinite; }
+    @keyframes drive { from { transform: translateY(0); } to { transform: translateY(70px); } }
 
-    .section-label {
-      display: flex;
-      align-items: center;
-      gap: .85rem;
-      margin-bottom: 2rem;
-      color: var(--muted-2);
-      font-size: .65rem;
-      font-weight: 700;
-      letter-spacing: .18em;
-      text-transform: uppercase;
-    }
-    .section-label::before, .section-label::after {
-      content: ''; flex: 1; height: 1px;
-      background: linear-gradient(90deg, transparent, var(--border), transparent);
-    }
+    /* ── Sections ─────────────────────────────────── */
+    main > section.wrap { padding-block: clamp(64px, 11vh, 130px); }
+    main > section.wrap.closer { padding-bottom: clamp(80px, 14vh, 160px); }
+    .kicker { font-size: 13px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--peach); font-feature-settings: "case" 1; }
+    h2 { font-family: "Instrument Serif", serif; font-weight: 400; font-size: clamp(40px, 5vw, 68px); line-height: 1.04; margin-top: 14px; }
+    .section-lede { margin-top: 18px; color: var(--muted); max-width: 52ch; font-size: 18px; }
 
-    .steps {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-      gap: 1rem;
-    }
-
+    /* Steps: embossed cards, recessed number wells */
+    .steps { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin-top: 48px; counter-reset: step; }
     .step {
-      position: relative;
-      background:
-        radial-gradient(circle at 0% 0%, rgba(255,138,107,0.08), transparent 45%),
-        radial-gradient(circle at 100% 100%, rgba(139,92,246,0.08), transparent 45%),
-        linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%),
-        var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.25rem;
-      overflow: hidden;
-      box-shadow: var(--lift-neutral), var(--emboss-rim-soft), var(--emboss-base);
-      transition: transform .2s ease, box-shadow .25s ease;
+      padding: 26px 24px 28px; border-radius: 20px;
+      background: var(--surface); border: 1px solid var(--border);
+      box-shadow: 0 14px 34px rgba(0,0,0,0.32), var(--emboss-rim), var(--emboss-base);
     }
-
-    @media (hover: hover) and (pointer: fine) {
-      .step:hover {
-        transform: translateY(-3px);
-        box-shadow: var(--lift-neutral-hi), var(--emboss-rim-soft), var(--emboss-base);
-      }
-    }
-
-    /* gradient border */
     .step::before {
-      content: '';
-      position: absolute; inset: 0;
-      border-radius: var(--radius);
-      padding: 1px;
-      background: linear-gradient(135deg, rgba(255,138,107,0.30), transparent 40%, transparent 60%, rgba(139,92,246,0.30));
-      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-              mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-      -webkit-mask-composite: xor;
-              mask-composite: exclude;
-      pointer-events: none;
-      opacity: .5;
+      counter-increment: step; content: counter(step, decimal-leading-zero);
+      display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 12px;
+      font: 700 14px "JetBrains Mono", monospace; color: var(--peach);
+      background: rgba(0,0,0,0.3); box-shadow: var(--recess);
+    }
+    .step h3 { margin-top: 20px; font-size: 19px; font-weight: 750; line-height: 1.3; }
+    .step p { margin-top: 8px; color: var(--muted); font-size: 15.5px; }
+
+    /* Feature rows: copy beside a real product shot */
+    .feature { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: clamp(32px, 6vw, 96px); }
+    .feature + .feature { margin-top: clamp(72px, 12vh, 140px); }
+    .feature.flip .copy { order: 2; }
+    .feature .copy p { margin-top: 18px; color: var(--muted); font-size: 18px; max-width: 44ch; }
+    .feature ul { list-style: none; margin-top: 22px; display: grid; gap: 10px; }
+    .feature li { display: flex; gap: 12px; align-items: baseline; color: var(--text); font-size: 16.5px; }
+    .feature li::before { content: ""; flex: 0 0 8px; height: 8px; border-radius: 50%; background: var(--rose); box-shadow: 0 0 10px var(--rose); transform: translateY(-2px); }
+    .shot { position: relative; display: grid; place-items: center; padding: clamp(28px, 4vw, 56px); border-radius: 28px;
+      background: radial-gradient(70% 80% at 50% 40%, rgba(244,114,182,0.12), transparent 70%), rgba(255,255,255,0.02);
+      border: 1px solid var(--border); }
+    .shot img { border-radius: 18px; box-shadow: 0 34px 70px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.08); }
+    .shot .popup { width: min(100%, 340px); }
+    .shot .wide { width: 100%; }
+    .shot .float { position: absolute; width: min(64%, 300px); left: 6%; bottom: 8%; border-radius: 14px; }
+
+    /* Privacy */
+    .promises { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 44px; }
+    .promise { padding: 26px; border-radius: 20px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); box-shadow: var(--recess); }
+    .promise h3 { font-size: 18px; font-weight: 750; }
+    .promise p { margin-top: 8px; color: var(--muted); font-size: 15.5px; }
+
+    /* Closing CTA */
+    .closer { text-align: center; }
+    .closer h2 { font-size: clamp(48px, 6.4vw, 92px); }
+    .closer .actions { justify-content: center; display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; }
+
+    footer { padding: 34px 0 48px; border-top: 1px solid var(--border); color: var(--muted-2); font-size: 14px; }
+    footer .wrap { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; justify-content: space-between; }
+    footer .made { font-family: "Instrument Serif", serif; font-style: italic; font-size: 18px; color: var(--muted); }
+    footer .made em { color: var(--rose); }
+    footer nav { padding: 0; gap: 22px; }
+    footer a { text-decoration: none; color: var(--muted); } footer a:hover { color: var(--text); }
+
+    /* Entrance: one rise per block, only where motion is welcome. */
+    @media (prefers-reduced-motion: no-preference) {
+      .rise { animation: rise .8s var(--ease-out) both; }
+      .rise.d1 { animation-delay: .08s; } .rise.d2 { animation-delay: .16s; } .rise.d3 { animation-delay: .26s; }
+      @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .bubble, .twinkle, .glow, .dashes { animation: none; }
+      .bubble { left: 6%; }
     }
 
-    .step-num {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: .75rem;
-      font-weight: 700;
-      width: 30px; height: 30px;
-      background: linear-gradient(180deg, var(--peach) 0%, var(--coral) 50%, var(--rose) 100%);
-      border-radius: 8px;
-      display: grid; place-items: center;
-      color: #14111c;
-      margin-bottom: 1rem;
-      box-shadow:
-        0 4px 12px rgba(255,138,107,0.40),
-        inset 0 1px 0 rgba(255,255,255,0.45),
-        inset 0 -1px 2px rgba(0,0,0,0.18);
+    /* ── Small screens ────────────────────────────── */
+    @media (max-width: 960px) {
+      .hero { grid-template-columns: 1fr; }
+      .hero .lede { max-width: 36ch; }
+      .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .feature, .feature.flip { grid-template-columns: 1fr; }
+      .feature.flip .copy { order: 0; }
+      .promises { grid-template-columns: 1fr; }
     }
-
-    .step h3 {
-      font-size: .95rem;
-      font-weight: 600;
-      margin-bottom: .4rem;
-      color: var(--text);
-    }
-
-    .step p {
-      color: var(--muted);
-      font-size: .875rem;
-      line-height: 1.55;
-      margin: 0;
-    }
-
-    /* ── Features strip ── */
-    .features {
-      display: flex;
-      flex-wrap: wrap;
-      gap: .5rem;
-      justify-content: center;
-      max-width: 700px;
-      margin: 3.5rem auto 0;
-    }
-
-    .feat-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: .45rem;
-      background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03));
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 5px 13px;
-      font-size: .8rem;
-      font-weight: 500;
-      color: var(--muted);
-      box-shadow: var(--lift-small), var(--emboss-rim-faint), var(--emboss-base-soft);
-    }
-
-    .feat-pill .icon {
-      font-size: .9rem;
-    }
-
-    /* ── Footer ── */
-    footer {
-      position: relative; z-index: 1;
-      text-align: center;
-      padding: 2rem 1.5rem;
-      border-top: 1px solid var(--border);
-      font-family: 'Instrument Serif', serif;
-      font-style: italic;
-      font-size: .95rem;
-      color: var(--muted);
-    }
-
-    footer span {
-      background: linear-gradient(110deg, var(--coral), var(--rose), var(--violet));
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-    }
-
-    footer a { color: var(--coral); text-decoration: none; }
-    footer a:hover { color: var(--peach); }
-
-    @media (max-width: 600px) {
-      nav { padding: 1rem; }
-      .hero { padding: 4rem 1rem 3rem; }
-      .section { padding: 0 1rem 4rem; }
+    @media (max-width: 560px) {
+      body { font-size: 16px; }
+      .nav-links .hide-sm { display: none; }
       .steps { grid-template-columns: 1fr; }
+      .stage { aspect-ratio: 4 / 4.2; }
+      .stage .badge { width: 52%; }
+      .btn { width: 100%; }
     }
   </style>
 </head>
 <body>
 
-<nav>
-  <a class="nav-logo" href="index.html">
-    <div class="logo-mark">
-      <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="2" width="3.5" height="10" rx="1" fill="#f4f1ea" opacity="0.9"/>
-        <rect x="8.5" y="2" width="3.5" height="10" rx="1" fill="#f4f1ea" opacity="0.9"/>
+<header class="wrap">
+  <nav aria-label="Main">
+    <a class="brand" href="/" aria-label="Duet home"><img src="/img/icon.png" alt="" width="40" height="40" /><span>Du<em>et</em></span></a>
+    <div class="nav-links">
+      <a class="hide-sm" href="#how">How it works</a>
+      <a class="hide-sm" href="/privacy">Privacy</a>
+      <!-- Chrome Web Store listing (live once the item is published). -->
+      <a class="pill" href="https://chromewebstore.google.com/detail/camlmonjomhnabjgkbjkalbeokgohomm" target="_blank" rel="noopener">Add to Chrome</a>
+    </div>
+  </nav>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div>
+      <h1 class="serif rise">Watch <span class="grad">together</span>,<br />even apart.</h1>
+      <p class="lede rise d1">Play, pause and seek in lockstep — on any video site. Send one link and you're watching the same moment.</p>
+      <div class="actions rise d2">
+        <a class="btn btn-primary" href="https://chromewebstore.google.com/detail/camlmonjomhnabjgkbjkalbeokgohomm" target="_blank" rel="noopener">Add to Chrome — it's free</a>
+        <a class="btn btn-ghost" href="#how">See how it works</a>
+      </div>
+      <p class="fine rise d3">No accounts. Works on YouTube, Vimeo and any HTML5 video.</p>
+    </div>
+
+    <figure class="stage rise d2" aria-label="A video with Duet's badge in the corner: in sync with Sam, with chat">
+      <svg class="scene" viewBox="0 0 1600 1040" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#140c2e"/><stop offset=".45" stop-color="#4a2160"/><stop offset=".72" stop-color="#c2456a"/><stop offset=".9" stop-color="#f59f6b"/></linearGradient>
+          <radialGradient id="sun" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffe6b8"/><stop offset=".6" stop-color="#ffb37d"/><stop offset="1" stop-color="#ff8f6b" stop-opacity="0"/></radialGradient>
+          <linearGradient id="road" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a1530"/><stop offset="1" stop-color="#0b0710"/></linearGradient>
+          <clipPath id="roadclip"><path d="M760 702 L840 702 L1180 1040 L420 1040Z"/></clipPath>
+        </defs>
+        <rect width="1600" height="1040" fill="url(#sky)"/>
+        <g fill="#fff" opacity=".75">
+          <circle class="twinkle" cx="210" cy="90" r="2"/><circle class="twinkle" cx="420" cy="160" r="1.5"/><circle class="twinkle" cx="640" cy="70" r="1.8"/>
+          <circle class="twinkle" cx="980" cy="120" r="1.4"/><circle class="twinkle" cx="1220" cy="60" r="2"/><circle class="twinkle" cx="1420" cy="180" r="1.5"/>
+          <circle class="twinkle" cx="1500" cy="90" r="1.2"/><circle class="twinkle" cx="90" cy="220" r="1.2"/><circle class="twinkle" cx="760" cy="210" r="1.3"/>
+        </g>
+        <circle class="glow" cx="800" cy="560" r="200" fill="url(#sun)"/>
+        <path d="M0 600 L180 470 L320 560 L470 430 L640 590 L760 520 L900 600 L1060 450 L1220 560 L1380 470 L1600 590 L1600 1040 L0 1040Z" fill="#3a1a48" opacity=".9"/>
+        <path d="M0 660 L140 590 L300 650 L460 560 L620 660 L820 610 L980 670 L1160 580 L1340 650 L1600 600 L1600 1040 L0 1040Z" fill="#24112f"/>
+        <path d="M0 720 L1600 700 L1600 1040 L0 1040Z" fill="#150a1c"/>
+        <path d="M760 702 L840 702 L1180 1040 L420 1040Z" fill="url(#road)"/>
+        <g clip-path="url(#roadclip)"><g class="dashes" fill="#ffd9a8" opacity=".85">
+          <path d="M795 640 h10 l4 22 h-18z"/><path d="M793 710 h14 l6 30 h-26z"/><path d="M789 780 h22 l9 42 h-40z"/>
+          <path d="M784 860 h32 l13 58 h-58z"/><path d="M777 950 h46 l17 80 h-80z"/>
+        </g></g>
       </svg>
-    </div>
-    <span class="logo-text">Duet</span>
-  </a>
-  <a class="nav-link" href="privacy.html">Privacy Policy</a>
-</nav>
-
-<section class="hero">
-  <div class="status-pill">
-    <div class="dot"></div>
-    Chrome Extension · Free
+      <div class="bubble" aria-hidden="true"><b>SAM</b><i>wait, who is driving?? 👀</i></div>
+      <img class="badge" src="/img/badge-open.webp" width="528" height="586" alt="Duet's badge: Both ready? Count us in, Go to Sam, Bring Sam here, reactions, chat history, in sync" />
+    </figure>
   </div>
 
-  <h1>Watch videos together,<br/><em>in perfect sync</em></h1>
+  <section id="how" class="wrap">
+    <div class="kicker">How it works</div>
+    <h2>Four steps. <span class="grad">One beat.</span></h2>
+    <ol class="steps">
+      <li class="step"><h3>You both install Duet</h3><p>A free Chrome extension. Takes about ten seconds.</p></li>
+      <li class="step"><h3>Create a room</h3><p>Send the invite link — or read out the 6-letter code.</p></li>
+      <li class="step"><h3>Open the same video</h3><p>YouTube, Vimeo, or any site with a normal video player.</p></li>
+      <li class="step"><h3>Press play</h3><p>Every pause, seek and skip happens on both screens.</p></li>
+    </ol>
+  </section>
 
-  <p>Pause, play, and seek stay in lockstep across two screens. No screen sharing, no lag, no accounts — just press play.</p>
-
-  <div class="hero-actions">
-    <a class="btn btn-primary" href="https://chrome.google.com/webstore" target="_blank" rel="noopener">
-      Add to Chrome — it's free
-    </a>
-    <a class="btn btn-secondary" href="https://github.com/eliudmichira/DuetWatch" target="_blank" rel="noopener">
-      View on GitHub
-    </a>
-  </div>
-
-  <div class="features">
-    <span class="feat-pill"><span class="icon">⚡</span> Real-time sync</span>
-    <span class="feat-pill"><span class="icon">💬</span> Chat &amp; reactions</span>
-    <span class="feat-pill"><span class="icon">🔒</span> No accounts needed</span>
-    <span class="feat-pill"><span class="icon">🎬</span> Any HTML5 video</span>
-    <span class="feat-pill"><span class="icon">🌐</span> YouTube, Vimeo &amp; more</span>
-    <span class="feat-pill"><span class="icon">🎯</span> Drift correction</span>
-  </div>
-</section>
-
-<div class="section">
-  <div class="section-label">How it works</div>
-
-  <div class="steps">
-    <div class="step">
-      <div class="step-num">01</div>
-      <h3>Install on both browsers</h3>
-      <p>You and your partner each add Duet to Chrome — takes about 10 seconds.</p>
+  <section class="wrap">
+    <div class="feature">
+      <div class="copy">
+        <div class="kicker">Ready check</div>
+        <h2>Both ready? <span class="grad">3, 2, 1 — play.</span></h2>
+        <p>No more "okay… now!" over the phone. Ask once; when they're ready, both videos pause on the same frame, count down together and start at the same instant.</p>
+      </div>
+      <div class="shot">
+        <img class="wide" src="/img/countdown.webp" width="1200" height="667" alt="A 3-2-1 countdown over the video" loading="lazy" />
+        <img class="float" src="/img/ask-card.webp" width="528" height="162" alt="Alex is ready to press play. I'm ready / Not yet" loading="lazy" />
+      </div>
     </div>
-    <div class="step">
-      <div class="step-num">02</div>
-      <h3>Create a room</h3>
-      <p>One person clicks "Create a room" and shares the 6-character code.</p>
+
+    <div class="feature flip">
+      <div class="copy">
+        <div class="kicker">Chat &amp; reactions</div>
+        <h2>Talk <span class="grad">without pausing.</span></h2>
+        <p>Messages float across the screen like subtitles, reactions drift up the side, and the history is there when you look away.</p>
+        <ul>
+          <li>"Go to Sam" and "Bring Sam here" — back in sync in one click</li>
+          <li>Follows them to the next episode, with a "Stay here" escape</li>
+          <li>Hide the badge with ✕ — sync keeps running</li>
+        </ul>
+      </div>
+      <div class="shot"><img class="popup" src="/img/badge-open.webp" width="528" height="586" alt="Duet's badge with chat history and reactions" loading="lazy" /></div>
     </div>
-    <div class="step">
-      <div class="step-num">03</div>
-      <h3>Open the same video</h3>
-      <p>Both navigate to the same video on YouTube, Vimeo, or any HTML5 site.</p>
+
+    <div class="feature">
+      <div class="copy">
+        <div class="kicker">Your room</div>
+        <h2>Your room. <span class="grad">Your story.</span></h2>
+        <p>Your room with each person is saved, so next time it's one click: "Watch with Sam." Duet keeps a little tally of the nights you've spent watching together — on your computer, nowhere else.</p>
+      </div>
+      <div class="shot"><img class="popup" src="/img/popup-room.webp" width="680" height="1162" alt="Duet's popup in a room: You and Sam, 14h 20m watched together, 9 nights, Sam is watching Night Drive" loading="lazy" /></div>
     </div>
-    <div class="step">
-      <div class="step-num">04</div>
-      <h3>Press play. You're in sync.</h3>
-      <p>Every pause, seek, and reaction stays in lockstep automatically.</p>
+  </section>
+
+  <section class="wrap" id="privacy">
+    <div class="kicker">Private by design</div>
+    <h2>Just the two of you.</h2>
+    <div class="promises">
+      <div class="promise"><h3>No accounts</h3><p>No sign-up, no email, no password. Install it and press play.</p></div>
+      <div class="promise"><h3>Nothing kept</h3><p>Messages are deleted within seconds. Names and page info go when you leave the room.</p></div>
+      <div class="promise"><h3>No tracking</h3><p>No analytics, no ads, no selling anything. <a href="/privacy">Read the privacy policy</a>.</p></div>
     </div>
-  </div>
-</div>
+  </section>
+
+  <section class="wrap closer">
+    <h2>Press play <span class="grad">together</span>.</h2>
+    <div class="actions">
+      <a class="btn btn-primary" href="https://chromewebstore.google.com/detail/camlmonjomhnabjgkbjkalbeokgohomm" target="_blank" rel="noopener">Add to Chrome — it's free</a>
+    </div>
+  </section>
+</main>
 
 <footer>
-  <span>watch together</span> &nbsp;·&nbsp; © 2026 Duet &nbsp;·&nbsp;
-  <a href="privacy.html">Privacy Policy</a> &nbsp;·&nbsp;
-  <a href="https://github.com/eliudmichira/DuetWatch" target="_blank" rel="noopener">GitHub</a>
+  <div class="wrap">
+    <span class="made">made for the <em>two of you</em></span>
+    <nav aria-label="Footer">
+      <a href="/privacy">Privacy</a>
+      <a href="https://github.com/eliudmichira/Duet" target="_blank" rel="noopener">GitHub</a>
+      <span>© 2026 Duet</span>
+    </nav>
+  </div>
 </footer>
 
 </body>
