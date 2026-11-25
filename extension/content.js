@@ -32,6 +32,7 @@
     driftSeconds: null,     // my position − partner's (s): negative = I'm behind
     isApplyingRemote: false,
     partnerTyping: false,
+    bothPaused: false,      // both videos paused (the moment for a ready check)
     // Partners
     partnerName: "",
     partnerEmoji: "",
@@ -70,6 +71,9 @@
   let myEmoji = "";
   let agentAdapter = null;
   let agentInitialized = false;
+  let srcSwappedAt = 0;          // when the attached video last changed source
+  let seekingAt = 0;             // when the attached video last started a seek
+  const SEEK_STALL_MS = 3000;    // a `waiting` this soon after a seek is the seek loading
   let typingClearTimer = null;
 
   // Undo sync: save position before catch-up so user can revert
@@ -327,30 +331,56 @@
     }
     v.__duetAttached = true;
     video = v;
-    const guard = (fn) => () => { 
+    const guard = (fn) => () => {
       if (video !== v) return; // Drop events from old hidden videos
-      try { fn(); } catch { contextInvalid = true; teardown(); } 
+      try { fn(); } catch { contextInvalid = true; teardown(); }
     };
+    // A player that swaps its source (an ad starting or ending, the next
+    // episode) fires play/pause/seek at the new media's time. Note the swap
+    // so sendSync can hold those events back. `emptied` fires only when
+    // media that was already loaded is thrown away, so a first load (lazy
+    // players set their src on the user's first click) doesn't count, and it
+    // is queued before the new media's play/pause events.
+    v.addEventListener("emptied", () => { srcSwappedAt = Date.now(); });
+    // A seek always stalls briefly while the new spot loads. That isn't the
+    // network struggling, so the `waiting` it causes mustn't pause the
+    // partner or tell them we're buffering.
+    v.addEventListener("seeking", () => { seekingAt = Date.now(); });
     v.addEventListener("play",       guard(() => { if (consumeRemoteEvent("play"))    return; sendSync("play");  sendTabInfo(true); }));
     v.addEventListener("pause",      guard(() => { if (consumeRemoteEvent("pause"))   return; sendSync("pause"); sendTabInfo(true); }));
     v.addEventListener("seeked",     guard(() => { if (consumeRemoteEvent("seeked"))  return; sendSync(v.paused ? "pause" : "play"); sendTabInfo(true); }));
     v.addEventListener("ratechange", guard(() => { if (consumeRemoteEvent("ratechange")) return; sendSync(v.paused ? "pause" : "play"); sendTabInfo(true); }));
     v.addEventListener("waiting",    guard(() => {
       if (S.isApplyingRemote || !S.connected) return;
-      sendSync("pause");
-      // Throttle: only ping the partner once per ~5s so a stuttering stream
-      // doesn't spam them.
-      const now = Date.now();
-      if (now - (window.__duet_lastBufferPing || 0) > 5000) {
-        window.__duet_lastBufferPing = now;
-        safeSend({ type: "SEND_REACTION", emoji: "⏳ Buffering..." });
-      }
+      if (v.seeking || Date.now() - seekingAt < SEEK_STALL_MS) return;
+      const sent = sendSync("pause");
+      if (!sent) return;
+      // Only tell the partner we're buffering if the background accepted the
+      // pause from this player (not an ad frame or a background tab), and at
+      // most once per ~5s so a stuttering stream doesn't spam them.
+      sent.then((res) => {
+        if (!res?.ok) return;
+        const now = Date.now();
+        if (now - (window.__duet_lastBufferPing || 0) > 5000) {
+          window.__duet_lastBufferPing = now;
+          safeSend({ type: "SEND_REACTION", emoji: "⏳ Buffering..." });
+        }
+      });
     }));
     v.addEventListener("playing",    guard(() => { if (consumeRemoteEvent("playing")) return; sendSync("play");  sendTabInfo(true); }));
     v.addEventListener("timeupdate", guard(() => { sendTabInfo(); }));
     dlog("[Duet] Attached to active video player.");
     render();
     sendTabInfo(true); // immediately push our metadata
+  }
+
+  // Find the frame's video *and* attach to it. Assigning `video` directly
+  // (as remote commands and snapshots used to) left a video with no
+  // listeners, so its local play/pause never reached the partner.
+  function ensureVideo() {
+    const v = findVideo();
+    if (v) attachListeners(v);
+    return video;
   }
 
   // ── MutationObserver: instant video detection (replaces 1.5s polling) ──
@@ -429,17 +459,35 @@
   }, true);
 
   // ── Send local action ──────────────────────────────────────
-  function sendSync(action) {
-    if (S.isApplyingRemote || !S.connected || !video) return;
+  // Did the user just click or press a key in this frame? Transient user
+  // activation lasts a few seconds after a real gesture and can't be faked by
+  // page script, so autoplay, ads and scripted players read as false.
+  function userActive() {
+    try { return !!navigator.userActivation?.isActive; } catch { return false; }
+  }
+  const SRC_SWAP_GRACE_MS = 3000;
+
+  // `opts.leader`: the ready-check asker recording the agreed play; not a
+  // user gesture, but this frame is the controlled one, so it counts.
+  // Returns the background's reply (a promise) when sent, else null.
+  function sendSync(action, opts = {}) {
+    if (S.isApplyingRemote || !S.connected || !video) return null;
+    const user = userActive();
+    // Just after a source swap the events describe an ad or the next video,
+    // not where the partner should be — hold them even if a click caused it.
+    if (Date.now() - srcSwappedAt < SRC_SWAP_GRACE_MS && !opts.leader) return null;
+    // Without a gesture, a muted video is an autoplay preview or an ad.
+    if (!user && !opts.leader && video.muted) return null;
     const sig = `${action}|${video.currentTime.toFixed(2)}`;
     const now = Date.now();
-    if (sig === lastSentSig && now - lastSentAt < 250) return;
+    if (sig === lastSentSig && now - lastSentAt < 250) return null;
     lastSentSig = sig;
     lastSentAt = now;
-    logSyncEvent("LOCAL_SYNC", { action, time: video.currentTime });
+    logSyncEvent("LOCAL_SYNC", { action, time: video.currentTime, user });
 
-    safeSend({
+    return safeSend({
       type: "SYNC_EVENT",
+      user: user || !!opts.leader,
       state: {
         action,
         currentTime: video.currentTime,
@@ -450,10 +498,7 @@
 
   // ── Apply Remote Sync ──────────────────────────────────────
   function applySync(state, serverNow) {
-    if (!video) {
-      video = findVideo();
-      if (!video) return;
-    }
+    if (!video && !ensureVideo()) return;
 
     // Reset any in-flight apply window so we don't carry stale expectations.
     endApplyingRemote();
@@ -466,9 +511,14 @@
       targetTime = state.currentTime + elapsed;
     }
 
+    // Is the partner changing play/pause, or just moving the playhead?
+    const actionChanges = state.action === "play" ? video.paused : !video.paused;
+
     // Force-syncs always seek; normal updates only seek when drifting > 1s
     const driftThreshold = state.force ? 0 : 1.0;
+    let jumped = false;
     if (Math.abs(video.currentTime - targetTime) > driftThreshold) {
+      jumped = Math.abs(video.currentTime - targetTime) > 2;
       try { video.currentTime = targetTime; expected.add("seeked"); } catch {}
     }
 
@@ -487,10 +537,13 @@
 
     // A catch-up the user asked for is "you → partner", not something the
     // partner did to you.
+    // Play/pause gets the signature flash; a seek says where they jumped to.
     const who = S.partnerName || "Partner";
     if (!state.quiet) {
       showFlash(state.action, state.catchUp ? `Caught up to ${who}`
-        : state.force ? `${who} re-synced you` : null);
+        : state.force ? `${who} re-synced you`
+        : jumped && !actionChanges ? `${who} jumped to ${fmtClock(targetTime)}`
+        : null);
     }
 
     expectedRemoteEvents = expected;
@@ -631,7 +684,10 @@
       videoTitle: getVideoTitle(),
       duration: isFinite(video.duration) ? video.duration : 0,
       currentTime: video.currentTime,
-      paused: video.paused
+      paused: video.paused,
+      // Read by the background to pick the controlled player; never stored
+      // (sanitizeMeta keeps only the fields the DB rules allow).
+      muted: !!video.muted
     };
     safeSend({ type: "TAB_INFO", info });
   }
@@ -943,6 +999,43 @@
     .btn-soft:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(255,255,255,0.18); box-shadow: var(--lift-small-hi), var(--emboss-rim-soft), var(--emboss-base-soft); }
     .btn-soft:active:not(:disabled) { transform: none; box-shadow: var(--recess); }
     .btn-soft:disabled { opacity: .75; cursor: default; }
+    /* Context-aware primary (renderPrimary): only one control is raised at a
+       time. The ready button drops to the soft look when it isn't the move;
+       "Go to" takes the primary look while you're out of sync. */
+    .btn-primary.is-quiet:not(.is-waiting) {
+      color: var(--text);
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 100%);
+      box-shadow: var(--lift-small), var(--emboss-rim-soft), var(--emboss-base-soft);
+    }
+    .btn-primary.is-quiet:not(.is-waiting):hover:not(:disabled) {
+      border-color: rgba(255,255,255,0.18);
+      box-shadow: var(--lift-small-hi), var(--emboss-rim-soft), var(--emboss-base-soft);
+    }
+    .btn-soft.is-primary {
+      color: #14111c; border-color: transparent;
+      background: linear-gradient(180deg, var(--peach) 0%, var(--coral) 50%, var(--rose) 100%);
+      box-shadow: 0 4px 12px rgba(255,138,107,0.35), var(--emboss-rim), var(--emboss-base);
+    }
+    .btn-soft.is-primary:hover:not(:disabled) {
+      border-color: transparent;
+      box-shadow: 0 7px 16px rgba(255,138,107,0.45), inset 0 1px 0 rgba(255,255,255,0.55), var(--emboss-base);
+    }
+    /* One-tap fix in the bar: a small Lifted pill in the primary recipe. */
+    .fix-key {
+      flex-shrink: 0; border: none; border-radius: 999px;
+      padding: 4px 9px;
+      font-weight: 700; font-size: 11px; color: #14111c; white-space: nowrap;
+      background: linear-gradient(180deg, var(--peach) 0%, var(--coral) 50%, var(--rose) 100%);
+      box-shadow: 0 3px 8px rgba(255,138,107,0.35), var(--emboss-rim), var(--emboss-base-soft);
+      transition: var(--press);
+    }
+    .fix-key[hidden] { display: none; }
+    .fix-key:hover { transform: translateY(-1px); box-shadow: 0 5px 12px rgba(255,138,107,0.45), var(--emboss-rim), var(--emboss-base-soft); }
+    .fix-key:active { transform: none; box-shadow: 0 1px 4px rgba(255,138,107,0.30), var(--emboss-rim-soft); }
+    .fix-key:disabled { opacity: .75; cursor: default; }
+    /* Make room for it: the wordmark steps aside while the fix is showing. */
+    .badge.has-fix .brand, .badge.has-fix .sep { display: none; }
     .btn-primary.is-waiting {
       color: var(--text);
       background: rgba(0,0,0,0.28);
@@ -1589,7 +1682,12 @@
     const closeBtn = el("button", "icon-key close", { id: "__pp_close_btn", type: "button", title: "Hide on this page (you stay in the room)", "aria-label": "Hide Duet on this page", text: "×" });
     closeBtn.addEventListener("click", (e) => { e.stopPropagation(); setDismissed(true); });
     closeBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
-    topbar.append(minBtn, closeBtn);
+    // One-tap fix, right in the bar, while out of sync or on another video,
+    // so "11s behind" never needs the controls opened to act on.
+    const fixBtn = el("button", "fix-key", { id: "__pp_fix_btn", type: "button", text: "Catch up", hidden: "" });
+    fixBtn.addEventListener("click", (e) => { e.stopPropagation(); onCatchUpClick(); });
+    fixBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    topbar.append(fixBtn, minBtn, closeBtn);
     installBadgeDrag(topbar);
 
     // Controls (shown on hover / while typing).
@@ -1664,7 +1762,7 @@
     const syncBtn = $ui("__pp_sync_btn");
     if (!syncBtn || syncBtn.disabled) return;
     // Save current position for undo before syncing
-    if (!video) video = findVideo();
+    if (!video) ensureVideo();
     if (video) {
       preSyncPosition = video.currentTime;
       preSyncTimestamp = Date.now();
@@ -1677,7 +1775,12 @@
     // Only claim success when the background actually verified that local
     // playback matches partner's projected position. Drift > 1s gets a
     // distinct "Off by Xs" message instead of a misleading checkmark.
-    if (res?.error) {
+    if (res?.navigating) {
+      // On another video: the background is opening theirs and will catch
+      // up once it loads, so this page is about to go away.
+      showFlash("play", `Opening ${who}'s video…`);
+      syncBtn.textContent = `Opening ${who}'s video…`;
+    } else if (res?.error) {
       showFlash("pause", res.error);
       syncBtn.textContent = "Try again";
     } else if (res?.ok) {
@@ -1721,7 +1824,35 @@
     if (res?.error) showFlash("pause", res.error);
   }
 
+  // Which control gets the one raised look (DESIGN.md: one primary action):
+  //   a ready check in progress          → the ready button
+  //   out of sync / on another video     → "Go to <partner>"
+  //   both paused, in step               → the ready check ("Both ready?")
+  //   playing in sync, or nothing to do  → none; everything stays quiet
+  function primaryAction() {
+    if (readyState.phase && readyState.phase !== "none") return "ready";
+    if (!S.connected || S.peerCount < 2) return "none";
+    if (S.driftStatus === "out_of_sync" || S.driftStatus === "mismatch") return "go";
+    if (S.driftStatus === "sync" && S.bothPaused) return "ready";
+    return "none";
+  }
+  function renderPrimary() {
+    const p = primaryAction();
+    $ui("__pp_ready_btn")?.classList.toggle("is-quiet", p !== "ready");
+    $ui("__pp_sync_btn")?.classList.toggle("is-primary", p === "go");
+    const fix = $ui("__pp_fix_btn");
+    if (fix) {
+      const show = S.driftStatus === "out_of_sync" || S.driftStatus === "mismatch";
+      fix.hidden = !show || !S.connected || S.peerCount < 2;
+      fix.textContent = S.driftStatus === "mismatch" ? "Go there" : "Catch up";
+      fix.title = S.driftStatus === "mismatch"
+        ? `Open what ${S.partnerName || "your partner"} is watching`
+        : `Jump to where ${S.partnerName || "your partner"} is`;
+    }
+  }
+
   function renderReady() {
+    renderPrimary();
     const btn = $ui("__pp_ready_btn");
     const r = readyState;
     const who = S.partnerName || "your partner";
@@ -1779,13 +1910,14 @@
   }
 
   // Pause both at the agreed spot, count 3-2-1, press play at the same
-  // server-clock instant. Every frame gets this: the one holding the video
-  // drives playback, the one owning the badge draws the countdown.
+  // server-clock instant. Every frame gets this: only the controlled frame
+  // (`drive`) touches its video, the one owning the badge draws the countdown.
   function runReadyGo(msg) {
     const delay = Math.max(0, Math.min(10000, msg.go - msg.serverNow));
     const startAt = Date.now() + delay;
-    if (!video) video = findVideo();
-    if (video && typeof msg.time === "number") {
+    const drive = msg.drive !== false;
+    if (drive && !video) ensureVideo();
+    if (drive && video && typeof msg.time === "number") {
       endApplyingRemote();
       S.isApplyingRemote = true;
       expectedRemoteEvents = new Set();
@@ -1799,7 +1931,7 @@
         applySync({ action: "play", currentTime: msg.time, force: true, quiet: true }, null);
         // The asker records the play in the room state (the partner's apply
         // is a no-op — they're already playing at the same spot).
-        if (msg.leader) setTimeout(() => sendSync("play"), 900);
+        if (msg.leader) setTimeout(() => sendSync("play", { leader: true }), 900);
       }, delay);
     }
     if (frameOwnsBadge) showCountdown(startAt);
@@ -1983,6 +2115,13 @@
     }
   }
 
+  // 0:28 · 12:05 · 1:02:09 — a position in the video.
+  function fmtClock(sec) {
+    const s = Math.max(0, Math.floor(sec || 0));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = String(s % 60).padStart(2, "0");
+    return h ? `${h}:${String(m).padStart(2, "0")}:${r}` : `${m}:${r}`;
+  }
+
   // 1.4s · 12s · 12m 34s · 1h 05m
   function fmtDrift(sec) {
     const a = Math.abs(sec);
@@ -1994,9 +2133,11 @@
 
   // text: short label beside the face; title: the full sentence (tooltip).
   function badgeStatus() {
+    // Labels stay short so the bar never truncates them; the tooltip (title)
+    // carries the full sentence.
     const who = S.partnerName || "your partner";   // mid-sentence
     const Who = S.partnerName || "Your partner";   // sentence start
-    if (S.peerCount < 2) return { face: false, emoji: "👋", text: "waiting for partner", title: "Waiting for your partner to join" };
+    if (S.peerCount < 2) return { face: false, emoji: "👋", text: "waiting…", title: "Waiting for your partner to join" };
     if (S.partnerTyping)  return { face: true, typing: true, text: "typing…", title: `${Who} is typing` };
     const d = S.driftSeconds;
     const gap = typeof d === "number" && Math.abs(d) >= 0.1
@@ -2007,8 +2148,8 @@
       case "sync":        return { face: true, text: "in sync", title: `In sync with ${who}` };
       case "warning":
       case "out_of_sync": return { face: true, ...(gap || { text: "out of sync", title: `Out of sync with ${who}` }) };
-      case "mismatch":    return { face: true, text: "different video", title: `${Who} is watching something else` };
-      default:            return { face: true, text: "no video yet", title: `${Who} is here — waiting for a video` };
+      case "mismatch":    return { face: true, text: "other video", title: `${Who} is watching something else` };
+      default:            return { face: true, text: "no video", title: `${Who} is here — waiting for a video` };
     }
   }
 
@@ -2074,19 +2215,15 @@
     setFace($ui("__pp_tray_av"), status.face, status.emoji, status.typing);
     const statusText = $ui("__pp_status_text");
     statusText.textContent = status.text;
-    statusText.title = status.title;
+    // Connection speed is for troubleshooting, not the bar: tooltip only.
+    statusText.title = typeof S.lastPingMs === "number"
+      ? `${status.title} · connection ${S.lastPingMs}ms` : status.title;
     const srKey = `${S.peerCount >= 2}|${S.driftStatus}|${S.partnerTyping}`;
     const sr = $ui("__pp_status_sr");
     if (sr && sr.dataset.k !== srKey) { sr.dataset.k = srKey; sr.textContent = status.title; }
 
-    const ping = $ui("__pp_ping");
-    if (typeof S.lastPingMs === "number") {
-      ping.textContent = `${S.lastPingMs}ms`;
-      ping.dataset.q = S.lastPingMs < 100 ? "good" : S.lastPingMs < 300 ? "ok" : "bad";
-      ping.title = "Round trip to the sync server";
-    } else {
-      ping.textContent = "";
-    }
+    renderPrimary();
+    badge.classList.toggle("has-fix", !$ui("__pp_fix_btn")?.hidden);
 
     badge.classList.add("is-visible");
     applyMinimizedDom();
@@ -2102,7 +2239,7 @@
     $ui("__pp_undo_btn")?.remove();
     const undoBtn = el("button", "btn-ghost", { id: "__pp_undo_btn", type: "button", text: "↩ Undo — back to where I was" });
     undoBtn.addEventListener("click", () => {
-      if (!video) video = findVideo();
+      if (!video) ensureVideo();
       if (video && preSyncPosition !== null) {
         video.currentTime = preSyncPosition;
         showFlash("play", `Reverted to ${preSyncPosition.toFixed(1)}s`);
@@ -2367,6 +2504,7 @@
         patch.partnerEmoji = "";
       }
       if (typeof message.ping === "number") patch.lastPingMs = message.ping;
+      patch.bothPaused = !!(message.mine?.paused && message.partner?.paused);
       // Compute drift status
       const hasLiveData = (m) =>
         m && typeof m.currentTime === "number" && typeof m.url === "string" &&
@@ -2397,13 +2535,14 @@
       
     } else if (message.type === "GET_VIDEO_SNAPSHOT") {
       // Synchronous-ish: respond with current video state for sync-to-me
-      if (!video) video = findVideo();
+      if (!video) ensureVideo();
       if (!video) { sendResponse({ hasVideo: false }); return true; }
       sendResponse({
         hasVideo: true,
         currentTime: video.currentTime,
         playbackRate: video.playbackRate,
-        paused: video.paused
+        paused: video.paused,
+        score: scoreVideo(video) // lets the background prefer the real player over an ad frame
       });
       return true;
     } else if (message.type === "BADGE_HIDDEN?") {

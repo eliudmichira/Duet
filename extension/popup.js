@@ -96,6 +96,8 @@ function renderMeSummary() {
 function setMeExpanded(open) {
   $("me-editor").hidden = !open;
   $("me-summary").setAttribute("aria-expanded", String(open));
+  // Once collapsed, the one-line summary is how you get back in.
+  if (!open) $("me").classList.remove("first-run");
 }
 $("me-summary").addEventListener("click", () => {
   const open = $("me-editor").hidden;
@@ -169,19 +171,25 @@ async function runSyncButton(id, type, busyText, okText, labelFn) {
   const label = btn.querySelector("span");
   btn.disabled = true;
   label.textContent = busyText;
-  clearMsg("main-msg");
+  clearMsg("room-msg");
   let res;
   try { res = await chrome.runtime.sendMessage({ type }); } catch {
     res = { error: "Extension not ready. Try again." };
   }
   // Only claim success when the background verified the two positions match.
-  if (res?.ok) {
+  if (res?.navigating) {
+    // You were on another video (or none): their page is opening and the
+    // background catches up once it loads. Nothing more to do here.
+    label.textContent = `Opening ${partnerFirstName() || "their"}'s video…`;
+    setTimeout(() => window.close(), 700);
+    return;
+  } else if (res?.ok) {
     btn.classList.add("success");
     label.textContent = okText;
   } else if (typeof res?.drift === "number") {
-    showMsg("main-msg", "warn", `Couldn't fully sync — off by ${res.drift.toFixed(1)}s. Try again.`);
+    showMsg("room-msg", "warn", `Couldn't fully sync — off by ${res.drift.toFixed(1)}s. Try again.`);
   } else {
-    showMsg("main-msg", "error", res?.error || "Couldn't sync.");
+    showMsg("room-msg", "error", res?.error || "Couldn't sync.");
   }
   setTimeout(() => {
     btn.classList.remove("success");
@@ -213,6 +221,7 @@ function renderReadyBtn() {
     r.phase === "asking" && !r.meReady ? `${who || "Partner"} is ready — I'm ready too` :
     r.phase === "asking" ? "Starting…" :
     "Both ready? Count us in";
+  renderPrimary();
 }
 $("ready-btn").addEventListener("click", async () => {
   const r = readyInfo || { phase: "none" };
@@ -221,11 +230,33 @@ $("ready-btn").addEventListener("click", async () => {
   else if (r.phase === "asking" && r.byMe) msg = { type: "READY_ANSWER", ready: false };
   else if (r.phase === "asking" && !r.meReady) msg = { type: "READY_ANSWER", ready: true };
   if (!msg) return;
-  clearMsg("main-msg");
+  clearMsg("room-msg");
   let res;
   try { res = await chrome.runtime.sendMessage(msg); } catch { res = { error: "Extension not ready. Try again." }; }
-  if (res?.error) showMsg("main-msg", "error", res.error);
+  if (res?.error) showMsg("room-msg", "error", res.error);
 });
+
+// ── One raised action at a time (DESIGN.md hierarchy rule) ──
+//   a ready check in progress            → the ready button
+//   out of sync, or on another / no video → "Go to <partner>"
+//   both paused, in step                 → the ready check
+//   playing in sync                      → nothing raised
+function primaryAction() {
+  if (readyInfo?.phase && readyInfo.phase !== "none") return "ready";
+  if ($("control-row").style.display !== "flex") return "none"; // partner not here
+  if (partnerFreshness().state === "gone") return "none";
+  if (!myMeta?.url) return "go";
+  if (normalizeUrl(myMeta.url) !== normalizeUrl(partnerMeta.url)) return "go";
+  const a = projectTime(myMeta), b = projectTime(partnerMeta);
+  if (a !== null && b !== null && Math.abs(a - b) > 2) return "go";
+  if (myMeta.paused && partnerMeta.paused) return "ready";
+  return "none";
+}
+function renderPrimary() {
+  const p = primaryAction();
+  $("ready-btn")?.classList.toggle("is-quiet", p !== "ready");
+  $("sync-me-btn")?.classList.toggle("is-primary", p === "go");
+}
 
 // ── Chat history ───────────────────────────────────────────
 function chatRow(item) {
@@ -318,9 +349,31 @@ async function renderPairs() {
     forget.textContent = "✕";
     forget.title = "Forget this room";
     forget.setAttribute("aria-label", `Forget ${p?.name ? `room with ${p.name}` : `room ${code}`}`);
+    // Forgetting is one click, so it can be taken back: the row becomes an
+    // undo strip for a few seconds before the list closes up.
     forget.addEventListener("click", async () => {
-      try { await chrome.runtime.sendMessage({ type: "FORGET_PAIR", code }); } catch {}
-      renderPairs();
+      let res = null;
+      try { res = await chrome.runtime.sendMessage({ type: "FORGET_PAIR", code }); } catch {}
+      const removed = res?.removed;
+      if (!removed) { renderPairs(); return; }
+      const strip = document.createElement("div");
+      strip.className = "pair-undo";
+      strip.setAttribute("role", "status");
+      const note = document.createElement("span");
+      note.textContent = p?.name ? `Forgot your room with ${p.name}` : `Forgot room ${code}`;
+      const undo = document.createElement("button");
+      undo.type = "button";
+      undo.textContent = "Undo";
+      let undone = false;
+      undo.addEventListener("click", async () => {
+        undone = true;
+        try { await chrome.runtime.sendMessage({ type: "RESTORE_PAIR", code, pair: removed }); } catch {}
+        renderPairs();
+      });
+      strip.append(note, undo);
+      item.replaceChildren(strip);
+      undo.focus();
+      setTimeout(() => { if (!undone) renderPairs(); }, 6000);
     });
     item.append(open, forget);
     list.appendChild(item);
@@ -374,9 +427,14 @@ $("chat-input").addEventListener("input", (e) => {
 });
 
 // ── Open partner's URL ─────────────────────────────────────
+// Same as "Go to": open their page, then catch up once it loads. Stays open
+// to say why when it can't (no video shared yet, not a web page).
 $("open-partner-url").addEventListener("click", async () => {
-  try { await chrome.runtime.sendMessage({ type: "OPEN_PARTNER_URL" }); } catch {}
-  window.close();
+  clearMsg("room-msg");
+  let res;
+  try { res = await chrome.runtime.sendMessage({ type: "CATCH_UP_TO_PARTNER" }); } catch { res = { error: "Extension not ready. Try again." }; }
+  if (res?.navigating || res?.ok) { window.close(); return; }
+  showMsg("room-msg", "error", res?.error || "Couldn't open their video.");
 });
 
 // ── State Helpers ──────────────────────────────────────────
@@ -390,6 +448,7 @@ function setConnectedState(roomCode, peerCount) {
   $("footer").hidden = true; // room view needs the height
   $("status-dot").classList.add("connected");
   $("status-text").textContent = `Live · Room ${roomCode}`;
+  clearMsg("main-msg");
   updatePeerHint(peerCount);
   loadChatLog();
   refreshShowBadge();
@@ -407,6 +466,7 @@ function setDisconnectedState() {
   $("status").hidden = true;
   $("footer").hidden = false;
   $("status-dot").classList.remove("connected");
+  clearMsg("room-msg");
   renderChatLog([]);
   renderPairs();
 }
@@ -543,6 +603,7 @@ function renderPartnerCard() {
     }
     $("partner-mismatch").style.display = "none";
     renderDrift(true); // hide drift pill while pending
+    renderPrimary();
     return;
   }
 
@@ -574,6 +635,7 @@ function renderPartnerCard() {
   $("partner-mismatch").style.display = mismatch ? "flex" : "none";
 
   renderDrift(mismatch);
+  renderPrimary();
 }
 
 // ── Drift indicator ────────────────────────────────────────
@@ -1147,8 +1209,12 @@ $("emoji-search")?.addEventListener("input", (e) => {
     } else {
       refreshAvatarBtnState(); // mark .is-default for the pulse hint
     }
-    // First run: open the editor so setting a name is the obvious first step.
-    if (!data.myName && !data.myEmoji) setMeExpanded(true);
+    // First run: open the editor so setting a name is the obvious first step,
+    // without the "Add your name" summary row repeating it above.
+    if (!data.myName && !data.myEmoji) {
+      $("me").classList.add("first-run");
+      setMeExpanded(true);
+    }
   } catch {}
 
   try {

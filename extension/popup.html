@@ -666,6 +666,9 @@
     }
     .msg.error   { background: rgba(255,107,122,0.08); border: 1px solid rgba(255,107,122,0.22); color: var(--danger);  display: block; }
     .msg.success { background: rgba(94,226,160,0.08);  border: 1px solid rgba(94,226,160,0.22);  color: var(--success); display: block; }
+    .msg.warn    { background: rgba(255,200,154,0.08); border: 1px solid rgba(255,200,154,0.24); color: var(--peach);   display: block; }
+    .msg.info    { background: rgba(255,255,255,0.04); border: 1px solid var(--border);           color: var(--text);    display: block; }
+    #room-msg { margin: 0 0 12px; }
 
     .panel { display: none; }
     .panel.active { display: block; }
@@ -1024,6 +1027,42 @@
 
     /* ── Connected controls ─────────────────────────── */
     .btn-ready { padding: 11px; font-size: 12.5px; }
+    /* Context-aware primary (popup.js renderPrimary): one raised action at a
+       time. The ready check steps down to the secondary look when it isn't
+       the move; "Go to" takes the primary look while you're out of sync. */
+    .btn-ready.is-quiet:not(.is-waiting) {
+      color: var(--text);
+      background: linear-gradient(180deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 100%);
+      border: 1px solid var(--border);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -2px 4px rgba(0,0,0,0.20);
+    }
+    .btn-ready.is-quiet:not(.is-waiting):hover {
+      border-color: var(--border-strong);
+      box-shadow: 0 10px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -2px 4px rgba(0,0,0,0.20);
+    }
+    .btn-icon.is-primary:not(.success) {
+      color: #14111c; border-color: transparent;
+      background: linear-gradient(180deg, var(--peach) 0%, var(--coral) 50%, var(--rose) 100%);
+      box-shadow: 0 8px 20px rgba(255,138,107,0.40), inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -2px 4px rgba(0,0,0,0.18);
+    }
+    .btn-icon.is-primary:not(.success):hover {
+      border-color: transparent;
+      box-shadow: 0 12px 28px rgba(255,138,107,0.50), inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -2px 4px rgba(0,0,0,0.18);
+    }
+    /* First run: the editor alone (no "Add your name" row above a name box). */
+    .me.first-run .me-summary { display: none; }
+    /* Forgotten saved room: the row turns into an undo strip for a few seconds. */
+    .pair-undo {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 10px 12px; border-radius: var(--radius-sm);
+      background: rgba(0,0,0,0.20); box-shadow: var(--recess);
+      font-size: 12px; color: var(--muted);
+    }
+    .pair-undo button {
+      border: none; background: none; padding: 2px 4px; cursor: pointer;
+      font: inherit; font-weight: 700; color: var(--peach);
+    }
+    .pair-undo button:hover { color: var(--text); }
     .btn-ready.is-waiting {
       color: var(--text);
       background: rgba(0,0,0,0.25);
@@ -1595,6 +1634,10 @@
           </div>
         </div>
 
+        <!-- Errors and warnings from room actions (Go to, Bring here, ready
+             check). The start screen has its own (#main-msg). -->
+        <div class="msg" id="room-msg" role="status" aria-live="polite"></div>
+
         <div class="chat-bar" id="chat-bar" style="display:none; margin-top: 12px; position: relative;">
           <div class="chat-log" id="chat-log" role="log" aria-label="Messages" hidden></div>
           <input type="text" id="chat-input" aria-label="Message your partner" placeholder="Message — it floats across their video" autocomplete="off" spellcheck="false" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 32px 10px 12px; color: var(--text); font-size: 12px; outline: none; transition: border 0.2s; box-shadow: var(--recess);" />
@@ -1693,7 +1736,7 @@
           <button type="submit" class="join-go" id="join-btn" aria-label="Join room">→</button>
         </form>
 
-        <div class="msg" id="main-msg"></div>
+        <div class="msg" id="main-msg" role="status" aria-live="polite"></div>
 
         <p class="invite-hint">Got an invite link? Just open it — no code needed.</p>
       </div>

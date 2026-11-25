@@ -60,9 +60,25 @@ let myEmoji = "";             // user-set avatar emoji
 let lastPeerCount = 0;        // for detecting 1→2 transition (auto-resync trigger)
 let togetherInfo = { since: null, total: 0 };  // co-watch timer state
 
-let primaryTabId = null;      // the single active video tab we are tracking
-let lastTabInfoTime = 0;      // when we last heard from the primary tab
-let primaryPaused = true;     // primary tab's last reported paused state
+// The controlled player: the one tab + frame whose video drives the room and
+// receives the partner's commands. Every other video (autoplay previews in
+// other tabs, ad iframes, hero banners) is ignored. Control moves only when
+// the user acts on another video, or the current one goes away.
+let primaryTabId = null;
+let primaryFrameId = null;    // null = frame unknown (send to all frames)
+let lastTabInfoTime = 0;      // when we last heard from the primary player
+
+function setPrimary(tabId, frameId) {
+  primaryTabId = tabId ?? null;
+  primaryFrameId = primaryTabId == null ? null : (frameId ?? null);
+  diag.primaryTabId = primaryTabId;
+  diag.primaryFrameId = primaryFrameId;
+}
+function isPrimarySender(sender) {
+  const tabId = sender?.tab?.id;
+  if (tabId == null || tabId !== primaryTabId) return false;
+  return primaryFrameId == null || primaryFrameId === (sender.frameId ?? 0);
+}
 
 // ── Diagnostics ─────────────────────────────────────────────
 // Surfaces silent failures (rule rejections, missing tab, etc.) to the popup
@@ -74,6 +90,7 @@ const diag = {
   myUserId:       null,
   partnerUserId:  null,
   primaryTabId:   null,
+  primaryFrameId: null,
   peerCount:      0,
   ruleHints:      [],
   syncEvents:     []  // ring buffer of recent sync events for diagnostics
@@ -634,18 +651,33 @@ async function pruneStaleReactions() {
   await Promise.all(removals);
 }
 
-// Ask every frame in a tab and return the first response with a video.
-async function getSnapshotFromAnyFrame(tabId) {
+// Ask every frame in a tab for its video and return the best one: the
+// controlled frame if it still has a video, else a playing one, else the
+// largest (so a small ad iframe doesn't beat the real player).
+async function getSnapshotFromAnyFrame(tabId, preferFrameId = null) {
   let frames = [];
   try {
     frames = (await chrome.webNavigation.getAllFrames({ tabId })) || [];
   } catch {}
   const ids = frames.length ? frames.map(f => f.frameId) : [0];
-  const results = await Promise.all(ids.map(frameId =>
+  const results = (await Promise.all(ids.map(frameId =>
     chrome.tabs.sendMessage(tabId, { type: "GET_VIDEO_SNAPSHOT" }, { frameId })
       .then(r => ({ frameId, r })).catch(() => null)
-  ));
-  return results.find(x => x && x.r?.hasVideo) || null;
+  ))).filter(x => x && x.r?.hasVideo);
+  if (!results.length) return null;
+  const preferred = preferFrameId != null && results.find(x => x.frameId === preferFrameId);
+  if (preferred) return preferred;
+  const rank = (x) => (x.r.paused ? 0 : 1e12) + (typeof x.r.score === "number" ? x.r.score : 0);
+  return results.sort((a, b) => rank(b) - rank(a))[0];
+}
+
+// Send to the controlled frame (or the whole tab while its frame is unknown).
+// Rejects when the tab is gone so callers can drop a stale primary.
+async function sendToPrimary(message) {
+  if (primaryTabId == null) throw new Error("no-primary");
+  if (primaryFrameId == null) return sendToAllFrames(primaryTabId, message);
+  try { await chrome.tabs.get(primaryTabId); } catch { throw new Error("no-tab"); }
+  return chrome.tabs.sendMessage(primaryTabId, message, { frameId: primaryFrameId }).catch(() => {});
 }
 
 // ── Rule validation ─────────────────────────────────────────
@@ -770,7 +802,7 @@ async function locateVideoTab() {
   const probe = async (tabId) => {
     if (!tabId) return null;
     try { await chrome.tabs.get(tabId); } catch { return null; }
-    const hit = await getSnapshotFromAnyFrame(tabId);
+    const hit = await getSnapshotFromAnyFrame(tabId, tabId === primaryTabId ? primaryFrameId : null);
     return hit ? { tabId, hit } : null;
   };
 
@@ -785,8 +817,8 @@ async function locateVideoTab() {
     found = hits.find(h => !h.hit.r.paused) || hits[0] || null;
   }
 
-  primaryTabId = found ? found.tabId : null;
-  diag.primaryTabId = primaryTabId;
+  if (found) setPrimary(found.tabId, found.hit.frameId);
+  else setPrimary(null);
   return found;
 }
 
@@ -811,21 +843,39 @@ function urlsMatch(a, b) {
     return (A.origin + A.pathname + A.search) === (B.origin + B.pathname + B.search);
   } catch { return a === b; }
 }
+// Same page ignoring the query: sites rewrite it on load (tracking or
+// timestamp parameters), so we use this only right after navigating there.
+function samePath(a, b) {
+  try { const A = new URL(a), B = new URL(b); return A.origin + A.pathname === B.origin + B.pathname; }
+  catch { return false; }
+}
 
-async function catchUpToPartner() {
+// opts.arrived: we just opened the partner's page; never navigate again from
+// here (a site that rewrites its URL would otherwise loop).
+async function catchUpToPartner(opts = {}) {
   if (!currentRoom) return { error: "Not in a room." };
   if (!partnerMeta || typeof partnerMeta.currentTime !== "number") {
     return { error: "Partner hasn't shared their position yet." };
   }
 
-  // Refuse if we're on a different page — seeking to partner's timestamp on
-  // a different video would land us at a meaningless spot.
-  if (myLastTabInfo?.url && partnerMeta.url && !urlsMatch(myLastTabInfo.url, partnerMeta.url)) {
-    return { error: "You're on a different page. Open partner's page first." };
+  // On a different page, seeking to the partner's timestamp would land on a
+  // meaningless spot: open their page instead, and catch up once it loads.
+  const samePage = urlsMatch(myLastTabInfo?.url, partnerMeta.url) ||
+    (opts.arrived && samePath(myLastTabInfo?.url, partnerMeta.url));
+  if (myLastTabInfo?.url && partnerMeta.url && !samePage) {
+    if (opts.arrived) return { error: "You're on a different page from your partner." };
+    const opened = await openPartnerVideo();
+    return opened?.error ? opened : { navigating: true };
   }
 
   const located = await locateVideoTab();
   if (!located) {
+    // No video open on our side: open theirs in a new tab (never over
+    // whatever page you're on) and catch up when it loads.
+    if (partnerMeta.url && !opts.arrived) {
+      const opened = await openPartnerVideo(null, { newTab: true });
+      return opened?.error ? opened : { navigating: true };
+    }
     return { error: "No video tab found. Open the video and try again." };
   }
   const targetTabId = located.tabId;
@@ -840,12 +890,13 @@ async function catchUpToPartner() {
     force: true,
     catchUp: true // we asked for this; the content script words its flash accordingly
   };
-  await sendToAllFrames(targetTabId, { type: "REMOTE_SYNC", state, serverNow: serverNow() });
+  await chrome.tabs.sendMessage(targetTabId, { type: "REMOTE_SYNC", state, serverNow: serverNow() },
+    { frameId: located.hit.frameId }).catch(() => {});
 
   // Verify: wait for the seek to settle, then read back local position and
   // compare to partner's *current* projected time (which has advanced).
   await new Promise(r => setTimeout(r, 900));
-  const hit = await getSnapshotFromAnyFrame(targetTabId);
+  const hit = await getSnapshotFromAnyFrame(targetTabId, located.hit.frameId);
   if (!hit) {
     return { ok: false, error: "Seeked, but couldn't verify (video may need a click first)." };
   }
@@ -904,7 +955,7 @@ async function syncToMe() {
 
   // Re-snapshot ourselves so the comparison is against current local time
   // (partner had ~1.8s to apply; our video kept playing during that window).
-  const hit2 = await getSnapshotFromAnyFrame(winnerTabId).catch?.(() => null) || hit;
+  const hit2 = (await getSnapshotFromAnyFrame(winnerTabId, hit.frameId).catch(() => null)) || hit;
   const localNow = (hit2?.r?.currentTime ?? snapshot.currentTime);
 
   if (!partnerMeta || typeof partnerMeta.currentTime !== "number") {
@@ -928,26 +979,31 @@ async function syncToMe() {
   };
 }
 
+// `message` may be a function of the frameId, for per-frame payloads.
 async function sendToAllFrames(tabId, message) {
+  const build = typeof message === "function" ? message : () => message;
   let frames = [];
   try {
     frames = (await chrome.webNavigation.getAllFrames({ tabId })) || [];
   } catch {}
   if (!frames.length) {
-    return chrome.tabs.sendMessage(tabId, message).catch(() => { throw new Error("no-tab"); });
+    return chrome.tabs.sendMessage(tabId, build(null)).catch(() => { throw new Error("no-tab"); });
   }
   await Promise.all(frames.map(f =>
-    chrome.tabs.sendMessage(tabId, message, { frameId: f.frameId }).catch(() => {})
+    chrome.tabs.sendMessage(tabId, build(f.frameId), { frameId: f.frameId }).catch(() => {})
   ));
 }
 
 // ── Broadcasts to UI ────────────────────────────────────────
 function broadcastToVideoTabs(message) {
-  if (message.type === "REMOTE_SYNC" && primaryTabId) {
-    // Prevent background tabs from acting on remote syncs.
-    // Send to ALL frames so cross-origin embed iframes (yflix, etc.) receive it.
-    sendToAllFrames(primaryTabId, message).catch(() => {
-      primaryTabId = null; // Tab probably closed
+  if (message.type === "REMOTE_SYNC") {
+    // Partner commands only ever reach the controlled player, never every
+    // tab and frame (ads, previews). With no player yet (fresh SW, closed
+    // tab), find one first; if there is none, the command is dropped.
+    const deliver = () => sendToPrimary(message);
+    deliver().catch(async () => {
+      setPrimary(null);
+      try { if (await locateVideoTab()) await deliver(); } catch {}
     });
     return;
   }
@@ -973,7 +1029,8 @@ function broadcastPartnerMeta() {
 // ── Open partner's URL ──────────────────────────────────────
 // `tabId`: navigate this tab (the invite page asking for itself) instead of
 // the tracked video tab.
-async function openPartnerVideo(tabId = null) {
+// opts.newTab: open in a new tab instead of reusing the video/active tab.
+async function openPartnerVideo(tabId = null, opts = {}) {
   if (!partnerMeta?.url) return { error: "Partner hasn't shared a video yet." };
   // The URL comes from the room's shared DB node — only follow web links.
   let partnerUrl;
@@ -983,8 +1040,8 @@ async function openPartnerVideo(tabId = null) {
   }
 
   // Try to redirect the exact tab we've been tracking, fallback to active tab
-  let targetTabId = tabId || primaryTabId;
-  if (!targetTabId) {
+  let targetTabId = opts.newTab ? null : (tabId || primaryTabId);
+  if (!targetTabId && !opts.newTab) {
     const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     targetTabId = tabs[0]?.id;
   }
@@ -992,9 +1049,30 @@ async function openPartnerVideo(tabId = null) {
   if (targetTabId) {
     await chrome.tabs.update(targetTabId, { url: partnerUrl.href });
   } else {
-    await chrome.tabs.create({ url: partnerUrl.href });
+    targetTabId = (await chrome.tabs.create({ url: partnerUrl.href })).id;
   }
+  // The new page starts at 0:00. Once its video reports in, jump to where
+  // the partner is, so following them doesn't leave you out of sync. Its
+  // player may sit in a new frame, so the frame is relearned from TAB_INFO.
+  setPrimary(targetTabId, null);
+  lastTabInfoTime = Date.now();
+  pendingArrival = { tabId: targetTabId, url: partnerUrl.href, until: Date.now() + ARRIVAL_WAIT_MS };
   return { ok: true };
+}
+
+// Set by openPartnerVideo; cleared once that tab's video reports on the
+// partner's page (then we catch up) or after ARRIVAL_WAIT_MS.
+let pendingArrival = null;
+const ARRIVAL_WAIT_MS = 30000;
+function maybeCatchUpOnArrival(sender, info) {
+  const p = pendingArrival;
+  if (!p) return;
+  if (Date.now() > p.until) { pendingArrival = null; return; }
+  if (sender.tab?.id !== p.tabId || !(info?.duration > 0)) return;
+  if (!partnerMeta?.url || !(samePath(info.url, partnerMeta.url) || samePath(info.url, p.url))) return;
+  pendingArrival = null;
+  // Give the player a moment to finish its own start-up seek/autoplay.
+  setTimeout(() => { catchUpToPartner({ arrived: true }).catch(() => {}); }, 800);
 }
 
 // ── Ready check ("Both ready?" → 3-2-1 → play) ──────────────
@@ -1044,13 +1122,18 @@ async function onReadyCheckChange() {
     if (readyGoHandled === cur.id) return;
     readyGoHandled = cur.id;
     if (serverNow() - cur.go > 2000) return; // stale countdown from before we joined
-    const tabId = primaryTabId || (await locateVideoTab())?.tabId;
-    if (tabId) {
-      sendToAllFrames(tabId, {
+    if (primaryTabId == null) await locateVideoTab();
+    const tabId = primaryTabId;
+    if (tabId != null) {
+      // Every frame gets the countdown (the badge may live in another frame),
+      // but only the controlled frame touches its video.
+      const driveFrame = primaryFrameId;
+      sendToAllFrames(tabId, (frameId) => ({
         type: "READY_GO", id: cur.id, go: cur.go, serverNow: serverNow(),
         time: typeof cur.time === "number" ? cur.time : null,
-        leader: cur.by === myUserId
-      }).catch(() => {});
+        leader: cur.by === myUserId,
+        drive: driveFrame == null || frameId == null || frameId === driveFrame
+      })).catch(() => {});
     }
     if (cur.by === myUserId) {
       const id = cur.id;
@@ -1237,9 +1320,27 @@ async function rememberPair() {
   }
 }
 
+// Returns the removed entry so the popup can offer Undo (RESTORE_PAIR).
 async function forgetPair(code) {
   const pairs = await getPairs();
+  const removed = pairs[code] || null;
   delete pairs[code];
+  try { await chrome.storage.local.set({ [PAIRS_KEY]: pairs }); } catch {}
+  return { ok: true, removed };
+}
+
+async function restorePair(code, pair) {
+  code = String(code || "").toUpperCase().trim();
+  if (!/^[A-HJ-NP-Z2-9]{6}$/.test(code) || !pair || typeof pair !== "object") return { error: "Nothing to restore." };
+  const pairs = await getPairs();
+  pairs[code] = {
+    name: typeof pair.name === "string" ? pair.name.slice(0, 32) : "",
+    emoji: typeof pair.emoji === "string" ? pair.emoji.slice(0, 16) : "",
+    lastAt: typeof pair.lastAt === "number" ? pair.lastAt : Date.now(),
+    since: typeof pair.since === "number" ? pair.since : Date.now()
+  };
+  const codes = Object.keys(pairs).sort((a, b) => (pairs[b].lastAt || 0) - (pairs[a].lastAt || 0));
+  for (const c of codes.slice(PAIRS_MAX)) delete pairs[c];
   try { await chrome.storage.local.set({ [PAIRS_KEY]: pairs }); } catch {}
   return { ok: true };
 }
@@ -1314,38 +1415,50 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           break;
         }
 
-        case "SYNC_EVENT":
-          if (_sender.tab?.id) {
-            primaryTabId = _sender.tab.id; // Manual interaction steals control
-            diag.primaryTabId = primaryTabId;
+        case "SYNC_EVENT": {
+          // Only the controlled player speaks for this browser. Another video
+          // takes control only when the user acted on it (a click or key
+          // press in that frame); autoplay previews, ads and background tabs
+          // are dropped without telling the partner anything.
+          if (_sender.tab?.id == null) { sendResponse({ ignored: true }); break; }
+          if (!isPrimarySender(_sender)) {
+            if (!message.user) { sendResponse({ ignored: true }); break; }
+            setPrimary(_sender.tab.id, _sender.frameId ?? 0);
+            lastTabInfoTime = Date.now();
           }
-          await pushSyncEvent(message.state);
-          sendResponse({ ok: true });
+          const res = await pushSyncEvent(message.state);
+          sendResponse(res?.error ? res : { ok: true });
           break;
+        }
 
         case "TAB_INFO":
-          if (_sender.tab?.id) {
-            // Content script only sends TAB_INFO from the top frame, so per-tab
-            // dedup is already implicit. Track which tab is the active video tab
-            // so SYNC_TO_ME and OPEN_PARTNER_URL target the right place. Prefer
-            // the tab whose video is currently playing; otherwise keep what we have.
-            // Only the primary tab may publish meta — otherwise a paused
-            // background tab overwrites the playing one every second and the
-            // partner's card flips to "different video". A tab takes over when
-            // there's no primary, the primary went quiet, or it's playing
-            // while the primary is paused.
-            const senderTabId = _sender.tab.id;
-            const incomingPlaying = !message.info?.paused;
+          if (_sender.tab?.id != null) {
+            // Only the controlled player publishes meta; otherwise a paused
+            // background tab or an ad iframe overwrites it every second and
+            // the partner's card flips to "different video". A video takes
+            // over here only when there is no player yet, or the player went
+            // quiet (closed, navigated away) and this one is audible in the
+            // tab you're looking at. Taking over by user action happens in
+            // SYNC_EVENT.
             const primaryQuiet = (Date.now() - lastTabInfoTime) > 5000;
-            if (senderTabId !== primaryTabId &&
-                (!primaryTabId || primaryQuiet || (incomingPlaying && primaryPaused))) {
-              primaryTabId = senderTabId;
-              diag.primaryTabId = primaryTabId;
+            const audible = !message.info?.muted;
+            if (!isPrimarySender(_sender) && audible &&
+                (primaryTabId == null || (primaryQuiet && _sender.tab.active))) {
+              setPrimary(_sender.tab.id, _sender.frameId ?? 0);
             }
-            if (senderTabId === primaryTabId) {
+            // Frame not known yet (e.g. just navigated to the partner's page):
+            // the first audible video in the tab becomes the player, so a
+            // muted ad iframe that reports first doesn't.
+            // Exception: the top frame of a page we just opened for you (sites
+            // often autoplay muted after a navigation).
+            const arriving = pendingArrival?.tabId === _sender.tab.id && (_sender.frameId ?? 0) === 0;
+            if (isPrimarySender(_sender) && primaryFrameId == null && (audible || arriving)) {
+              setPrimary(primaryTabId, _sender.frameId ?? 0);
+            }
+            if (isPrimarySender(_sender) && primaryFrameId != null) {
               lastTabInfoTime = Date.now();
-              primaryPaused = !incomingPlaying;
               await pushTabInfo(message.info);
+              maybeCatchUpOnArrival(_sender, message.info);
             }
           }
           sendResponse({ ok: true });
@@ -1374,6 +1487,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "GET_PAIRS":     sendResponse({ pairs: await getPairs() }); break;
         case "OPEN_PAIR":     sendResponse(await openPairedRoom(message.code)); break;
         case "FORGET_PAIR":   sendResponse(await forgetPair(message.code)); break;
+        case "RESTORE_PAIR":  sendResponse(await restorePair(message.code, message.pair)); break;
 
         case "OPEN_PARTNER_URL":
           sendResponse(await openPartnerVideo(message.here ? _sender.tab?.id : null));
@@ -1548,8 +1662,7 @@ bootstrapQuietly();
 // keeps targeting a dead tabId and fails until something else reclaims primary.
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (tabId === primaryTabId) {
-    primaryTabId = null;
-    diag.primaryTabId = null;
+    setPrimary(null);
     lastTabInfoTime = 0;
   }
 });
