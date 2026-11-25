@@ -35,99 +35,17 @@ A small overlay in the corner shows "Partner paused" or "Partner played" so you 
 
 In the Firebase Console:
 - **Build → Realtime Database → Rules** tab
-- Replace everything with the JSON below, then click **Publish**.
+- Replace everything with the contents of [`firebase/database.rules.json`](firebase/database.rules.json), then click **Publish**.
+  (Or deploy it from the CLI: `firebase deploy --only database`.)
 
-These rules forbid listing or scanning the database — you can only read/write a room if you know its 6-character code.
+These rules forbid listing or scanning the database — you can only read/write a room if you know its 6-character code. Inside a room they also:
 
-**Recommended (strict)** — validates every field shape and rejects unknown ones. Safe for shared Firebase projects.
+- only let a whole room be created on a free code, and only let it be deleted once nobody is in it (never for saved rooms);
+- only accept sync, tab info, typing, pings, reactions and ready checks from someone registered in the room's presence list;
+- keep `created` and `host` fixed, require server timestamps (no forged times), and reject writes to rooms that don't exist;
+- validate every field's type and size and reject unknown fields.
 
-```json
-{
-  "rules": {
-    "rooms": {
-      ".read": false,
-      ".write": false,
-      "$roomId": {
-        ".read": "$roomId.length === 6",
-        ".write": "$roomId.length === 6",
-        "state": {
-          ".validate": "newData.hasChildren(['action','currentTime','updatedBy'])",
-          "action":       { ".validate": "newData.isString() && (newData.val() === 'play' || newData.val() === 'pause')" },
-          "currentTime":  { ".validate": "newData.isNumber()" },
-          "playbackRate": { ".validate": "newData.isNumber()" },
-          "updatedBy":    { ".validate": "newData.isString()" },
-          "serverTime":   { ".validate": "newData.isNumber()" },
-          "force":        { ".validate": "newData.isBoolean()" },
-          "$other":       { ".validate": false }
-        },
-        "meta": {
-          "$userId": {
-            "name":        { ".validate": "newData.isString() && newData.val().length <= 32" },
-            "emoji":       { ".validate": "newData.isString() && newData.val().length <= 16" },
-            "url":         { ".validate": "newData.isString()" },
-            "hostname":    { ".validate": "newData.isString()" },
-            "pageTitle":   { ".validate": "newData.isString()" },
-            "videoTitle":  { ".validate": "newData.isString()" },
-            "duration":    { ".validate": "newData.isNumber()" },
-            "currentTime": { ".validate": "newData.isNumber()" },
-            "paused":      { ".validate": "newData.isBoolean()" },
-            "buffering":   { ".validate": "newData.isBoolean()" },
-            "lastSeen":    { ".validate": "newData.isNumber()" },
-            "$other":      { ".validate": false }
-          }
-        },
-        "reactions": {
-          "$reactionId": {
-            "emoji": { ".validate": "newData.isString() && newData.val().length <= 140" },
-            "from":  { ".validate": "newData.isString()" },
-            "ts":    { ".validate": "newData.isNumber()" },
-            "$other":{ ".validate": false }
-          }
-        },
-        "together": {
-          "since": { ".validate": "newData.isNumber() || newData.val() === null" },
-          "total": { ".validate": "newData.isNumber()" }
-        },
-        "host":    { ".validate": "newData.isString()" },
-        "created": { ".validate": "newData.isNumber()" }
-      }
-    },
-    "presence": {
-      ".read": false,
-      ".write": false,
-      "$roomId": {
-        ".read": "$roomId.length === 6",
-        ".write": "$roomId.length === 6"
-      }
-    }
-  }
-}
-```
-
-**Permissive (loose)** — easier setup, no field validation. Fine for personal use among trusted partners.
-
-```json
-{
-  "rules": {
-    "rooms": {
-      ".read": false,
-      ".write": false,
-      "$roomId": {
-        ".read": "$roomId.length === 6",
-        ".write": "$roomId.length === 6"
-      }
-    },
-    "presence": {
-      ".read": false,
-      ".write": false,
-      "$roomId": {
-        ".read": "$roomId.length === 6",
-        ".write": "$roomId.length === 6"
-      }
-    }
-  }
-}
-```
+Use that file as-is: the extension's writes are tested against it, and older or looser rule sets let anyone holding a room code wipe or hijack the room.
 
 ### Step 3 — Load the extension in Chrome
 

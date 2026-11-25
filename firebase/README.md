@@ -15,7 +15,13 @@ firebase deploy --only database,functions --project pausepal-a4d71
 
 - `database.rules.json` — RTDB security rules. Includes:
   - Read/write require a 6-character room code (no enumeration).
-  - 75ms write floor per room (rate-limit per partner pair).
+  - No write rule at the room root except create-on-free-code and
+    delete-when-empty (never for `paired` rooms). RTDB grants cascade down, so
+    a broader grant there would override every rule below it.
+  - Per-user writes (`state`, `meta`, `typing`, `ping`, `reactions`,
+    `readycheck`) need the writer's id in `presence/<room>`; writes to rooms
+    without `created` are refused, so stragglers can't recreate deleted rooms.
+  - `created`/`host` immutable; timestamps must be server time (`now`).
   - Hard caps on every string field (URL ≤ 1024, title ≤ 256, etc.).
   - Numeric ranges on `currentTime`/`duration` (rejects garbage seek targets).
   - `$other: false` on every schema branch (rejects unknown fields).
@@ -23,7 +29,17 @@ firebase deploy --only database,functions --project pausepal-a4d71
   for 7+ days plus their corresponding presence records. It queries
   `rooms` by `lastTouch`, so it depends on the `.indexOn` in the rules —
   deploy rules before (or with) functions.
+- `rules.test.mjs` — Rules tests: replays the extension's writes plus attack
+  cases against the Database Emulator. Run before deploying rules:
+  `firebase emulators:exec --only database --project demo-duet "node rules.test.mjs"`
 - `firebase.json` — Project config glue.
+
+## Known limitation
+
+There is no Firebase Auth, so a user id is just a string. Anyone holding a
+room code can still add themselves to `presence`, remove someone else's
+presence entry, and then act as a room member. Closing that needs Anonymous
+Auth with ids tied to `auth.uid`.
 
 ## Operational notes
 
