@@ -12,8 +12,9 @@
 (() => {
   "use strict";
 
-  // TODO: replace with the real store listings once published.
-  const CHROME_STORE_URL  = "https://chrome.google.com/webstore";
+  // Chrome: the published listing (same link as the homepage).
+  // TODO: replace the Firefox search with the AMO listing once it's published.
+  const CHROME_STORE_URL  = "https://chromewebstore.google.com/detail/camlmonjomhnabjgkbjkalbeokgohomm";
   const FIREFOX_STORE_URL = "https://addons.mozilla.org/firefox/search/?q=Duet";
 
   const CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
@@ -55,13 +56,50 @@
     const isMobile = /android|iphone|ipad|mobile/i.test(navigator.userAgent);
     const primary = $("install-primary");
     const secondary = $("install-secondary");
-    primary.textContent = isFirefox ? "Add Duet to Firefox" : "Add Duet to Chrome";
-    primary.href = isFirefox ? FIREFOX_STORE_URL : CHROME_STORE_URL;
-    secondary.textContent = isFirefox ? "Using Chrome or Edge?" : "Using Firefox?";
-    secondary.href = isFirefox ? CHROME_STORE_URL : FIREFOX_STORE_URL;
-    $("mobile-note").hidden = !isMobile;
+    $("mobile-note").hidden = true;
     $("install-note").hidden = isMobile;
+    if (isMobile) renderPhoneInstall(primary, secondary);
+    else {
+      primary.textContent = isFirefox ? "Add Duet to Firefox" : "Add Duet to Chrome";
+      primary.href = isFirefox ? FIREFOX_STORE_URL : CHROME_STORE_URL;
+      secondary.textContent = isFirefox ? "Using Chrome or Edge?" : "Using Firefox?";
+      secondary.href = isFirefox ? CHROME_STORE_URL : FIREFOX_STORE_URL;
+    }
     show("install");
+  }
+
+  // Phones can't run browser extensions, and most invites are opened on one
+  // (they arrive in a chat app). So the main action is getting the link to a
+  // computer: the share sheet where there is one (send it to yourself, AirDrop),
+  // else copy it.
+  function renderPhoneInstall(primary, secondary) {
+    $("state-install").querySelector(".lede").textContent =
+      "Duet runs on a computer, in Chrome, Edge or Firefox. Send this link to your computer and open it there to join.";
+    const canShare = typeof navigator.share === "function";
+    const asButton = (a, label, onClick) => {
+      a.textContent = label;
+      a.href = location.href;
+      a.removeAttribute("target");
+      a.setAttribute("role", "button");
+      if (a.dataset.wired) return;
+      a.dataset.wired = "1";
+      a.addEventListener("click", (e) => { e.preventDefault(); onClick(a); });
+    };
+    const copy = async (a) => {
+      let ok = true;
+      try { await navigator.clipboard.writeText(location.href); } catch { ok = false; }
+      a.textContent = ok ? "Link copied — paste it on your computer" : "Couldn't copy — press and hold the address bar";
+    };
+    if (canShare) {
+      asButton(primary, "Send this link to my computer", async (a) => {
+        try { await navigator.share({ title: "Duet invite", text: "Join me on Duet", url: location.href }); }
+        catch (err) { if (err?.name !== "AbortError") copy(a); }
+      });
+      asButton(secondary, "Copy link", copy);
+    } else {
+      asButton(primary, "Copy link for my computer", copy);
+      secondary.hidden = true;
+    }
   }
 
   function renderStatus(status) {
