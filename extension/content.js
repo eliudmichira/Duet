@@ -596,73 +596,15 @@
     return { action, customLabel };
   }
 
-  // When running in a cross-origin iframe (yflix's embed, rapidshare, etc.),
-  // location.href is a per-session tokenized URL that differs between viewers
-  // even when they're on the same parent page. For partner-match purposes we
-  // need the parent page's URL, which both partners actually share.
-  //   - same-origin iframe: top.location.href works directly
-  //   - cross-origin iframe: top.location.href is blocked. We fall back to
-  //     a postMessage handshake with the top frame, then document.referrer,
-  //     then our own location as last resort.
-  //   - top frame: just location.href
-  let topFrameUrl = "";  // populated via postMessage from the top frame
-  function getPageUrl() {
-    if (isTopFrame) return location.href;
-    try { return window.top.location.href; } catch {}
-    if (topFrameUrl) return topFrameUrl;
-    if (document.referrer) return document.referrer;
-    return location.href;
-  }
-  function getPageHostname() {
-    try { return new URL(getPageUrl()).hostname.replace(/^www\./, ""); }
-    catch { return location.hostname.replace(/^www\./, ""); }
-  }
-
-  // Top frame: respond to URL queries from embedded iframes, AND broadcast our
-  // URL down on every history change (so SPA navigations stay in sync).
-  // Iframe: ask the parent for its URL on load, then cache replies.
-  if (isTopFrame) {
-    const broadcastUrl = () => {
-      const payload = { __duet_msg: "page-url", url: location.href };
-      try {
-        const frames = document.querySelectorAll("iframe");
-        frames.forEach((f) => { try { f.contentWindow?.postMessage(payload, "*"); } catch {} });
-      } catch {}
-    };
-    window.addEventListener("message", (e) => {
-      if (e?.data?.__duet_msg === "request-page-url" && fromDescendantFrame(e)) {
-        try { e.source?.postMessage({ __duet_msg: "page-url", url: location.href }, "*"); } catch {}
-      }
-    });
-    // Re-broadcast on SPA navigation
-    let lastHref = location.href;
-    setInterval(() => {
-      if (location.href !== lastHref) {
-        lastHref = location.href;
-        broadcastUrl();
-      }
-    }, 1500);
-    // Initial broadcast (after iframes have a chance to mount)
-    setTimeout(broadcastUrl, 500);
-  } else {
-    window.addEventListener("message", (e) => {
-      const data = e?.data;
-      if (!data || data.__duet_msg !== "page-url" || typeof data.url !== "string") return;
-      if (!fromTopFrame(e) || !/^https?:\/\//i.test(data.url)) return;
-      if (data.url !== topFrameUrl) {
-        topFrameUrl = data.url;
-        // Re-publish with the corrected URL right away so the partner card flips fast.
-        if (S.connected && video) sendTabInfo(true);
-      }
-    });
-    // Ask the parent on load (covers Referrer-Policy: no-referrer)
-    const askParent = () => {
-      try { window.parent?.postMessage({ __duet_msg: "request-page-url" }, "*"); } catch {}
-    };
-    askParent();
-    setTimeout(askParent, 1000);
-    setTimeout(askParent, 3000);
-  }
+  // A player in a cross-origin iframe (yflix's embed, rapidshare, etc.) sits
+  // at a per-viewer tokenized URL, so partner matching needs the page both
+  // people are on: the tab's URL. Frames no longer ask each other for it.
+  // The top frame used to postMessage location.href to every iframe with
+  // targetOrigin "*", on every page and every SPA navigation, in a room or
+  // not, which handed full URLs (query, #fragment, OAuth tokens) to ad and
+  // tracker frames. The background now fills in the tab's URL from
+  // sender.tab when this frame reports in (TAB_INFO), so nothing about the
+  // page is posted between frames at all.
 
   function sendTabInfo(force = false) {
     if (!S.connected || !video) return;
@@ -676,10 +618,11 @@
     lastTabInfoAt = now;
 
     const info = {
-      // Always report the parent page URL so partner-match works even when
-      // the player is in a cross-origin embed iframe.
-      url: getPageUrl(),
-      hostname: getPageHostname(),
+      // This frame's own address; the background swaps in the tab's URL,
+      // hostname and title (see TAB_INFO), so an embedded player reports
+      // the page both partners share.
+      url: location.href,
+      hostname: location.hostname.replace(/^www\./, ""),
       pageTitle: document.title,
       videoTitle: getVideoTitle(),
       duration: isFinite(video.duration) ? video.duration : 0,

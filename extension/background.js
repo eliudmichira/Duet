@@ -581,6 +581,23 @@ async function pushSyncEvent(state, opts = {}) {
   }
 }
 
+// The page both partners share is the tab's, not the reporting frame's: a
+// player in a cross-origin embed sits at a per-viewer tokenized URL. The
+// browser tells us the tab's URL and title with every message (sender.tab,
+// via the `tabs` permission), so frames never have to pass the page's
+// address to each other (which used to leak it to every iframe on the page).
+function withTabPage(info, tab) {
+  const out = { ...(info || {}) };
+  let url = null;
+  try { url = tab?.url ? new URL(tab.url) : null; } catch {}
+  if (url && /^https?:$/.test(url.protocol)) {
+    out.url = url.href;
+    out.hostname = url.hostname.replace(/^www\./, "");
+    if (typeof tab.title === "string" && tab.title) out.pageTitle = tab.title;
+  }
+  return out;
+}
+
 // Shape a TAB_INFO payload to fit the RTDB `meta` rules exactly. One
 // over-long string (a 300-char page title, a tokenized 2KB URL) or an unknown
 // key rejects the *whole* write, silently freezing the partner card.
@@ -1457,8 +1474,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             }
             if (isPrimarySender(_sender) && primaryFrameId != null) {
               lastTabInfoTime = Date.now();
-              await pushTabInfo(message.info);
-              maybeCatchUpOnArrival(_sender, message.info);
+              const info = withTabPage(message.info, _sender.tab);
+              await pushTabInfo(info);
+              maybeCatchUpOnArrival(_sender, info);
             }
           }
           sendResponse({ ok: true });
