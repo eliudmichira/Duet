@@ -1592,11 +1592,30 @@
     applyOverlayPosition(x, y);
   });
 
+  // Drag to move; a tap/click still acts as a tap/click. Movement under the
+  // threshold is a shaky click, not a drag. Fingers wobble more than mice.
+  const DRAG_THRESHOLD = { mouse: 8, pen: 8, touch: 12 };
+  // A mouse fires `click` right after the pointerup that ends a drag; that
+  // click must not also expand the puck or press a key in the bar. A finger
+  // fires none after it moved, so the guard must never outlive the gesture:
+  // it covers only the click that follows within this window, and the next
+  // pointerdown always clears it. (A one-shot "swallow the next click"
+  // listener used to stay armed after touch drags and eat the next real tap.)
+  const DRAG_CLICK_WINDOW_MS = 350;
+
   function installBadgeDrag(handle) {
-    const DRAG_THRESHOLD = 4;
     let drag = null;
+    let swallowClickUntil = 0;
+
+    handle.addEventListener("click", (e) => {
+      if (Date.now() > swallowClickUntil) return;
+      swallowClickUntil = 0;
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
 
     handle.addEventListener("pointerdown", (e) => {
+      swallowClickUntil = 0; // a new gesture: whatever it produces is real
       if (e.button !== 0) return;
       // Don't start drag from an interactive control inside the topbar.
       if (e.target instanceof Element && e.target.closest("button, input, a")) return;
@@ -1606,24 +1625,25 @@
       drag = {
         startX: e.clientX, startY: e.clientY,
         origX:  rect.left, origY:  rect.top,
-        moved: false, pointerId: e.pointerId
+        moved: false, pointerId: e.pointerId,
+        threshold: DRAG_THRESHOLD[e.pointerType] ?? DRAG_THRESHOLD.mouse
       };
       try { handle.setPointerCapture(e.pointerId); } catch {}
     });
 
     handle.addEventListener("pointermove", (e) => {
-      if (!drag) return;
+      if (!drag || e.pointerId !== drag.pointerId) return;
       const dx = e.clientX - drag.startX;
       const dy = e.clientY - drag.startY;
-      if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+      if (!drag.moved && Math.hypot(dx, dy) < drag.threshold) return;
       drag.moved = true;
       handle.style.cursor = "grabbing";
       applyOverlayPosition(drag.origX + dx, drag.origY + dy);
       e.preventDefault();
     });
 
-    const finish = () => {
-      if (!drag) return;
+    const finish = (e) => {
+      if (!drag || (e && e.pointerId !== drag.pointerId)) return;
       try { handle.releasePointerCapture(drag.pointerId); } catch {}
       handle.style.cursor = "";
       if (drag.moved) {
@@ -1632,14 +1652,18 @@
           const rect = overlay.getBoundingClientRect();
           try { chrome.storage.local.set({ __duet_badge_pos: { x: rect.left, y: rect.top } }); } catch {}
         }
-        // Swallow the synthetic click that would otherwise toggle hover state.
-        const stop = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
-        handle.addEventListener("click", stop, { capture: true, once: true });
+        // Only a completed drag can be followed by a click; a cancelled
+        // gesture never is.
+        if (e?.type === "pointerup") swallowClickUntil = Date.now() + DRAG_CLICK_WINDOW_MS;
       }
       drag = null;
     };
     handle.addEventListener("pointerup", finish);
     handle.addEventListener("pointercancel", finish);
+    // Capture can be lost without a pointerup (the element re-rendered, the
+    // window lost focus). Without this the badge would keep following the
+    // mouse with no button held.
+    handle.addEventListener("lostpointercapture", finish);
   }
 
   // ── Badge ──────────────────────────────────────────────────
